@@ -6,7 +6,6 @@ library(utilityR)
 library(readxl)
 library(data.table)
 library(stringdist)
-input_string <- "selected(${interview_type},'msna_f2f')"
 
 parse.formula <- function(input_string,return='value') {
   pattern_names <- "\\$\\{([^\\}]+)\\}"
@@ -413,22 +412,34 @@ server <- function(input, output, session) {
     if (!is.null(data.tool())) {
       questions <- get.relevanse.question(data.tool())
       question_name <- input$question_name
-      tree_data <- build_tree(questions, question_name)
-      tree_data <- tibble(
-        name = input$question_name, 
-        children = list(tree_data)
-      )
-      matrix_data <- build_matrix(questions, question_name, 0)
+      if (question_name %in% questions$ref.name) {
+        tree_data <- build_tree(questions, question_name)
+        tree_data <- tibble(
+          name = input$question_name, 
+          children = list(tree_data)
+        )
+        matrix_data <- build_matrix(questions, question_name, 0)
+        
+        output$tree_chart <- renderEcharts4r({
+          tree_data %>%
+            e_charts() %>% 
+            e_tree(orient = "RL", label = list(normal = list(position = "outside")), initialTreeDepth = 5)
+        })
+        
+        output$matrix_table <- renderTable({
+          matrix_data
+        })
+      } else {
+        tree_data <- tibble(
+          name = "question wasn't found in the survey",
+        )
+        output$tree_chart <- renderEcharts4r({
+          tree_data %>%
+            e_charts() %>% 
+            e_tree(orient = "RL", label = list(normal = list(position = "outside")), initialTreeDepth = 5)
+        })
+      }
       
-      output$tree_chart <- renderEcharts4r({
-        tree_data %>%
-          e_charts() %>% 
-          e_tree(orient = "RL", label = list(normal = list(position = "outside")), initialTreeDepth = 5)
-      })
-      
-      output$matrix_table <- renderTable({
-        matrix_data
-      })
     }
   })
 }
