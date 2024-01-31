@@ -7,82 +7,54 @@ library(readxl)
 library(data.table)
 library(stringdist)
 
-parse.formula <- function(input_string,return='value') {
-  pattern_names <- "\\$\\{([^\\}]+)\\}"
-  pattern_values <- "'(.*?)'"
-  conditions <- gregexpr("\\b(and|or)\\b", input_string, ignore.case = TRUE)
-  conditions <- regmatches(input_string, conditions)[[1]]
-  questions_values <- gsub("'", "", str_extract_all(input_string, pattern_values)[[1]])
-  questions_names <- gsub("\\$\\{|\\}", "", str_extract_all(input_string, pattern_names)[[1]])
-  if(return=='name'){
-    return(questions_names)
-  }else{
-    return(questions_values)
-  }
-}
-
+source("www/utils.R")
 
 
 ui <- fluidPage(
-  navbarPage(
-    "Kobo Checker App",
-    tabPanel(
-      "Data Checker",
-      titlePanel("Kobo Checker App"),
-      tags$head(
-        tags$style(HTML(
-          "
+  titlePanel("Kobo Checker App"),
+  tags$head(
+    tags$style(HTML(
+      "
             #table-container {
               overflow: visible !important;
             }
           "
-        )),
-        HTML(
-          '<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>'
-        ),
-        includeCSS("www/style.css"),
-        HTML(
-          '<a style="padding-left:10px;" class="app-title" href= "https://www.reach-initiative.org/" target="_blank"><img src="reach.jpg" height = "50"></a><span class="app-description" style="font-size: 16px; color: #FFFFFF"><strong>Database_test</strong></span>'
-        ),
-      ),
-      hr(),
-      sidebarLayout(
-        sidebarPanel(
-          fileInput("file", "Choose your kobo tool", accept = ".xlsx"),
-          actionButton("processBtn", "Process Data")
-        ),
-        mainPanel(
-          DTOutput("resultTable")
-        )
-      )
+    )),
+    HTML(
+      '<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>'
     ),
-    tabPanel(
-      "Question Inspection",
-      titlePanel("Survey Question Inspection"),
-      tags$head(
-        tags$style(HTML(
-          "
-            #table-container {
-              overflow: visible !important;
-            }
-          "
-        )),
-        HTML(
-          '<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>'
-        )
-      ),
-      sidebarLayout(
-        sidebarPanel(
-          textInput("question_name", "Enter Question Name", ""),
-          actionButton("submit_btn", "Submit")
-        ),
-        mainPanel(
-          tabsetPanel(
-            tabPanel("Tree View", echarts4rOutput("tree_chart")),
-            tabPanel("Relationship Matrix", tableOutput("matrix_table"))
-          )
-        )
-      )
+    includeCSS("www/style.css"),
+    HTML(
+      '<a style="padding-left:10px;" class="app-title" href= "https://www.reach-initiative.org/" target="_blank"><img src="reach.jpg" height = "50"></a><span class="app-description" style="font-size: 16px; color: #FFFFFF"><strong>Database_test</strong></span>'
+    ),
+  ),
+  hr(),
+  tabsetPanel(
+    tabPanel("Data Checker",
+             sidebarLayout(
+               sidebarPanel(
+                 fileInput("file", "Choose your kobo tool", accept = ".xlsx"),
+                 actionButton("processBtn", "Process Data")
+               ),
+               mainPanel(
+                 DTOutput("resultTable")
+               )
+             )
+    ),
+    tabPanel("Question Inspection",
+             titlePanel("Survey Question Inspection"),
+             sidebarLayout(
+               sidebarPanel(
+                 selectizeInput("question_name",'Select the question name',choices=NULL),
+                 actionButton("submit_btn", "Submit")
+               ),
+               mainPanel(
+                 tabsetPanel(
+                   tabPanel("Tree View", echarts4rOutput("tree_chart")),
+                   tabPanel("Relationship Matrix", tableOutput("matrix_table"))
+                 )
+               )
+             )
     )
   )
 )
@@ -96,7 +68,6 @@ server <- function(input, output, session) {
   
   label <- reactiveVal(NULL)
   
-  source("relevant_utils/utils.R")
   
   # Load data from file
   observeEvent(input$file, {
@@ -408,8 +379,23 @@ server <- function(input, output, session) {
       
     }
   })
-  observeEvent(input$submit_btn, {
+  
+  
+  observeEvent(input$processBtn, {
+    req(!is.null(data.tool()))
+    
+    names_list <-  data.tool() %>% filter(grepl('select_',type)) %>% pull(name)
+    
+    updateSelectizeInput(session, 'question_name', choices = names_list, server = TRUE)
+  })
+  
+  
+  observeEvent({
+    input$question_name
+    input$submit_btn
+    }, {
     if (!is.null(data.tool())) {
+
       questions <- get.relevanse.question(data.tool())
       question_name <- input$question_name
       if (question_name %in% questions$ref.name) {

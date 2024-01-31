@@ -126,3 +126,20 @@ build_matrix <- function(questions, question.name, depth) {
   res.df <- res.df[!duplicated(res.df), ]
   return(res.df)
 }
+
+
+parse.formula <- function(input_string,return='value') {
+  pattern_names <- "\\$\\{([^\\}]+)\\}"
+  pattern_values <- "'(.*?)'"
+  conditions <- gregexpr("\\b(and|or)\\b", input_string, ignore.case = TRUE)
+  conditions <- regmatches(input_string, conditions)[[1]]
+  questions_values <- gsub("'", "", str_extract_all(input_string, pattern_values)[[1]])
+  questions_names <- gsub("\\$\\{|\\}", "", str_extract_all(input_string, pattern_names)[[1]])
+  if(return=='name'){
+    return(questions_names)
+  }else{
+    return(questions_values)
+  }
+}
+
+
