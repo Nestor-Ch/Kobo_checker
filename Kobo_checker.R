@@ -1,5 +1,6 @@
 library(DT)
 library(shiny)
+library(echarts4r)
 library(tidyverse)
 library(utilityR)
 library(readxl)
@@ -24,33 +25,69 @@ parse.formula <- function(input_string,return='value') {
 
 
 ui <- fluidPage(
-  titlePanel("Kobo Checker App"),
-  tags$head(
-    tags$style(HTML(
-      "
-        #table-container {
-          overflow: visible !important;
-        }"
-    )),
-    HTML(
-      '<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>'
+  navbarPage(
+    "Kobo Checker App",
+    tabPanel(
+      "Data Checker",
+      titlePanel("Kobo Checker App"),
+      tags$head(
+        tags$style(HTML(
+          "
+            #table-container {
+              overflow: visible !important;
+            }
+          "
+        )),
+        HTML(
+          '<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>'
+        ),
+        includeCSS("www/style.css"),
+        HTML(
+          '<a style="padding-left:10px;" class="app-title" href= "https://www.reach-initiative.org/" target="_blank"><img src="reach.jpg" height = "50"></a><span class="app-description" style="font-size: 16px; color: #FFFFFF"><strong>Database_test</strong></span>'
+        ),
+      ),
+      hr(),
+      sidebarLayout(
+        sidebarPanel(
+          fileInput("file", "Choose your kobo tool", accept = ".xlsx"),
+          actionButton("processBtn", "Process Data")
+        ),
+        mainPanel(
+          DTOutput("resultTable")
+        )
+      )
     ),
-    includeCSS("www/style.css"),
-    HTML(
-      '<a style="padding-left:10px;" class="app-title" href= "https://www.reach-initiative.org/" target="_blank"><img src="reach.jpg" height = "50"></a><span class="app-description" style="font-size: 16px; color: #FFFFFF"><strong>Database_test</strong></span>'
-    ),
-  ),
-  hr(),
-  sidebarLayout(
-    sidebarPanel(
-      fileInput("file", "Choose your kobo tool", accept = ".xlsx"),
-      actionButton("processBtn", "Process Data")
-    ),
-    mainPanel(
-      DTOutput("resultTable")
+    tabPanel(
+      "Question Inspection",
+      titlePanel("Survey Question Inspection"),
+      tags$head(
+        tags$style(HTML(
+          "
+            #table-container {
+              overflow: visible !important;
+            }
+          "
+        )),
+        HTML(
+          '<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>'
+        )
+      ),
+      sidebarLayout(
+        sidebarPanel(
+          textInput("question_name", "Enter Question Name", ""),
+          actionButton("submit_btn", "Submit")
+        ),
+        mainPanel(
+          tabsetPanel(
+            tabPanel("Tree View", echarts4rOutput("tree_chart")),
+            tabPanel("Relationship Matrix", tableOutput("matrix_table"))
+          )
+        )
+      )
     )
   )
 )
+
 
 # Server
 server <- function(input, output, session) {
@@ -59,6 +96,8 @@ server <- function(input, output, session) {
   data.choices <- reactiveVal(NULL)
   
   label <- reactiveVal(NULL)
+  
+  source("relevant_utils/utils.R")
   
   # Load data from file
   observeEvent(input$file, {
@@ -75,7 +114,7 @@ server <- function(input, output, session) {
   
   # Process data and update table
   observeEvent(input$processBtn, {
-    if (!is.null(data())) {
+    if (!is.null(data.tool())) {
       kobo_data.t <- data.tool()
       kobo_data.c <- data.choices()
       labels <- label()
@@ -367,10 +406,33 @@ server <- function(input, output, session) {
           )
         )
       })
+      
     }
   })
-  
+  observeEvent(input$submit_btn, {
+    if (!is.null(data.tool())) {
+      questions <- get.relevanse.question(data.tool())
+      question_name <- input$question_name
+      tree_data <- build_tree(questions, question_name)
+      tree_data <- tibble(
+        name = input$question_name, 
+        children = list(tree_data)
+      )
+      matrix_data <- build_matrix(questions, question_name, 0)
+      
+      output$tree_chart <- renderEcharts4r({
+        tree_data %>%
+          e_charts() %>% 
+          e_tree(orient = "RL", label = list(normal = list(position = "outside")), initialTreeDepth = 5)
+      })
+      
+      output$matrix_table <- renderTable({
+        matrix_data
+      })
+    }
+  })
 }
 
 # Run the app
 shinyApp(ui, server)
+
