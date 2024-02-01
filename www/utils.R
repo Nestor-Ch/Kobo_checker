@@ -17,12 +17,12 @@ get.relevanse.question <- function(tool.survey) {
         ifelse(length(.) == 0, NA, .)}))
   
   get_relevant_surveys <- function(ref_name, df) {
-    if (is.na(ref_name)) {
-      return(c())
+    if (is.na(ref_name) || ref_name == "") {
+      return(NA)
     } else {
       parent_surveys <- unlist(strsplit(ref_name, " "))
-      relevant_surveys <- df$ref.name[df$parent.survey %in% parent_surveys]
-      result <- stringr::str_trim(paste(relevant_surveys, collapse = ' '))
+      relevant_surveys <- df[sapply(strsplit(df$parent.survey, " "), function(x) any(x %in% parent_surveys)), "ref.name", drop = FALSE]
+      result <- stringr::str_trim(paste(relevant_surveys$ref.name, collapse = ' '))
       if (result == "") {
         return(NA)
       } else {
@@ -38,6 +38,45 @@ get.relevanse.question <- function(tool.survey) {
   return(questions)
 }
 
+get.constraint.question <- function(tool.survey) {
+  questions <- data.frame(ref.name = ifelse(!grepl("group", tool.survey$type), tool.survey$name, NA))
+  questions <- na.omit(questions)
+  
+  questions <- questions %>%
+    dplyr::rowwise() %>%
+    dplyr::mutate(parent.survey = sapply(ref.name, function(x) {
+      constraint.condition <- filter(tool.survey, name == x)$constraint %>%
+        ifelse(length(.) == 0, NA, .)
+      pattern <- "\\$\\{([^\\}]+)\\}"
+      result <- gsub("\\$\\{|\\}", "", str_extract_all(constraint.condition, pattern)[[1]])
+      constraint_str <- paste(result, collapse = ' ')
+      return(ifelse(constraint_str == "", NA, constraint_str))
+    })) %>%
+    dplyr::mutate(relevant = sapply(ref.name, function(x) {
+      constraint.condition <- filter(tool.survey, name == x)$constraint %>%
+        ifelse(length(.) == 0, NA, .)}))
+  
+  get_constraint_surveys <- function(ref_name, df) {
+    if (is.na(ref_name) || ref_name == "") {
+      return(NA)
+    } else {
+      parent_surveys <- unlist(strsplit(ref_name, " "))
+      relevant_surveys <- df[sapply(strsplit(df$parent.survey, " "), function(x) any(x %in% parent_surveys)), "ref.name", drop = FALSE]
+      result <- stringr::str_trim(paste(relevant_surveys$ref.name, collapse = ' '))
+      if (result == "") {
+        return(NA)
+      } else {
+        return(result)
+      }
+    }
+  }
+  
+  questions <- questions %>%
+    dplyr::rowwise() %>%
+    dplyr::mutate(relevant.survey = get_constraint_surveys(ref.name, questions))
+  
+  return(questions)
+}
 
 parents.names <- function(questions, question.name) {
   parse.parents <- function(questions.row) {
@@ -81,6 +120,9 @@ build_tree_parents <- function(questions, question.name) {
   if (length(parent_names) == 0 || (length(parent_names) == 1 && parent_names[1] == "NA")) {
     return(NULL)
   }
+  if (question.name %in% parent_names) {
+    parent_names <- parent_names[!parent_names %in% question.name]
+  }
   for (parent_name in parent_names) {
     parent_tree <- build_tree_parents(questions, parent_name)
     parent.list <- append(parent.list, list(parent_tree))
@@ -108,6 +150,9 @@ build_tree_children <- function(questions, question.name) {
   }
   if (length(child_names) == 0 || (length(child_names) == 1 && child_names[1] == "NA")) {
     return(NULL)
+  }
+  if (question.name %in% child_names) {
+    child_names <- child_names[!child_names %in% question.name]
   }
   formulas.list <- list()
   for (child_name in child_names) {
@@ -158,6 +203,9 @@ build_matrix_parents <- function(questions, question.name, depth) {
   if (length(parents) == 0 || (length(parents) == 1 && parents[1] == "NA")) {
     return(NULL)
   }
+  if (question.name %in% parents) {
+    parents <- parents[!parents %in% question.name]
+  }
   
   for (parent in parents) {
     formula <- questions[questions$ref.name == question.name, ]$relevant
@@ -186,6 +234,9 @@ build_matrix_children <- function(questions, question.name, depth) {
   }
   if (length(children) == 0 || (length(children) == 1 && children[1] == "NA")) {
     return(NULL)
+  }
+  if (question.name %in% children) {
+    children <- children[!children %in% question.name]
   }
   
   for (child in children) {
