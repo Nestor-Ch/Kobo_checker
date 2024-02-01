@@ -34,10 +34,12 @@ ui <- fluidPage(
              sidebarLayout(
                sidebarPanel(
                  fileInput("file", "Choose your kobo tool", accept = ".xlsx"),
-                 actionButton("processBtn", "Process Data")
+                 actionButton("processBtn", "Process Data"),
+                 width = 3
                ),
                mainPanel(
-                 DTOutput("resultTable")
+                 DTOutput("resultTable"),
+                 width=9
                )
              )
     ),
@@ -46,7 +48,8 @@ ui <- fluidPage(
              sidebarLayout(
                sidebarPanel(
                  selectizeInput("question_name",'Select the question name',choices=NULL),
-                 actionButton("submit_btn", "Submit")
+                 actionButton("submit_btn", "Submit"),
+                 width = 3
                ),
                mainPanel(
                  tabsetPanel(
@@ -54,7 +57,8 @@ ui <- fluidPage(
                    tabPanel("Children Tree View", echarts4rOutput("tree_chart_children")),
                    tabPanel("Parents Relationship Matrix", tableOutput("parents_matrix_table")),
                    tabPanel("Children Relationship Matrix", tableOutput("children_matrix_table"))
-                 )
+                 ),
+                 width=9
                )
              )
     )
@@ -388,7 +392,7 @@ server <- function(input, output, session) {
     
     names_list <-  data.tool() %>% filter(grepl('select_',type)) %>% pull(name)
     
-    updateSelectizeInput(session, 'question_name', choices = names_list, server = TRUE)
+    updateSelectizeInput(session, 'question_name', choices = names_list, server = TRUE,selected ='')
   })
   
   
