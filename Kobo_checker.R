@@ -34,12 +34,10 @@ ui <- fluidPage(
              sidebarLayout(
                sidebarPanel(
                  fileInput("file", "Choose your kobo tool", accept = ".xlsx"),
-                 actionButton("processBtn", "Process Data"),
-                 width = 3
+                 actionButton("processBtn", "Process Data")
                ),
                mainPanel(
-                 DTOutput("resultTable"),
-                 width=9
+                 DTOutput("resultTable")
                )
              )
     ),
@@ -48,17 +46,17 @@ ui <- fluidPage(
              sidebarLayout(
                sidebarPanel(
                  selectizeInput("question_name",'Select the question name',choices=NULL),
-                 actionButton("submit_btn", "Submit"),
-                 width = 3
+                 actionButton("submit_btn", "Submit")
                ),
                mainPanel(
                  tabsetPanel(
                    tabPanel("Parents Tree View", echarts4rOutput("tree_chart_parents")),
                    tabPanel("Children Tree View", echarts4rOutput("tree_chart_children")),
                    tabPanel("Parents Relationship Matrix", tableOutput("parents_matrix_table")),
-                   tabPanel("Children Relationship Matrix", tableOutput("children_matrix_table"))
-                 ),
-                 width=9
+                   tabPanel("Children Relationship Matrix", tableOutput("children_matrix_table")),
+                   tabPanel("Constraint Parents Tree View", echarts4rOutput("constraint_tree_chart_parents")),
+                   tabPanel("Constraint Children Tree View", echarts4rOutput("constraint_tree_chart_children"))
+                 )
                )
              )
     )
@@ -392,7 +390,7 @@ server <- function(input, output, session) {
     
     names_list <-  data.tool() %>% filter(grepl('select_',type)) %>% pull(name)
     
-    updateSelectizeInput(session, 'question_name', choices = names_list, server = TRUE,selected ='')
+    updateSelectizeInput(session, 'question_name', choices = names_list, server = TRUE)
   })
   
   
@@ -403,6 +401,7 @@ server <- function(input, output, session) {
     if (!is.null(data.tool())) {
 
       questions <- get.relevanse.question(data.tool())
+      questions_constraints <- get.constraint.question(data.tool())
       question_name <- input$question_name
       if (question_name %in% questions$ref.name) {
         tree_data_parents <- build_tree_parents(questions, question_name)
@@ -416,6 +415,31 @@ server <- function(input, output, session) {
           name = input$question_name, 
           children = list(tree_data_children)
         )
+        
+        if (question_name %in% questions_constraints$ref.name) {
+          constraint_tree_data_parents <- build_tree_parents(questions_constraints, question_name)
+          constraint_tree_data_parents <- tibble(
+            name = input$question_name, 
+            children = list(constraint_tree_data_parents)
+          )
+          
+          constraint_tree_data_children <- build_tree_children(questions_constraints, question_name)
+          constraint_tree_data_children <- tibble(
+            name = input$question_name, 
+            children = list(constraint_tree_data_children)
+          )
+        } else {
+          constraint_tree_data_parents <- tibble(
+            name = input$question_name, 
+            children = list()
+          )
+          
+          constraint_tree_data_children <- tibble(
+            name = input$question_name, 
+            children = list()
+          )
+        }
+         
         
         matrix_data_parents <- build_matrix_parents(questions, question_name, 0)
         matrix_data_children <- build_matrix_children(questions, question_name, 0)
@@ -432,6 +456,18 @@ server <- function(input, output, session) {
             e_tree(orient = "LR", label = list(normal = list(position = "outside")), initialTreeDepth = 5)
         })
         
+        output$constraint_tree_chart_parents <- renderEcharts4r({
+          constraint_tree_data_parents %>%
+            e_charts() %>% 
+            e_tree(orient = "RL", label = list(normal = list(position = "outside")), initialTreeDepth = 5)
+        })
+        
+        output$constraint_tree_chart_children <- renderEcharts4r({
+          constraint_tree_data_children %>%
+            e_charts() %>% 
+            e_tree(orient = "LR", label = list(normal = list(position = "outside")), initialTreeDepth = 5)
+        })
+        
         output$parents_matrix_table <- renderTable({
           matrix_data_parents
         })
@@ -444,13 +480,13 @@ server <- function(input, output, session) {
         tree_data <- tibble(
           name = "question wasn't found in the survey",
         )
-        output$tree_chart_parents <- renderEcharts4r({
+        output$constraint_tree_chart_parents <- renderEcharts4r({
           tree_data %>%
             e_charts() %>% 
             e_tree(orient = "RL", label = list(normal = list(position = "outside")), initialTreeDepth = 5)
         })
         
-        output$tree_chart_children <- renderEcharts4r({
+        output$constraint_tree_chart_children <- renderEcharts4r({
           tree_data %>%
             e_charts() %>% 
             e_tree(orient = "LR", label = list(normal = list(position = "outside")), initialTreeDepth = 5)
