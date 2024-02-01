@@ -18,7 +18,7 @@ get.relevanse.question <- function(tool.survey) {
   
   get_relevant_surveys <- function(ref_name, df) {
     if (is.na(ref_name)) {
-      return(NA)
+      return(c())
     } else {
       parent_surveys <- unlist(strsplit(ref_name, " "))
       relevant_surveys <- df$ref.name[df$parent.survey %in% parent_surveys]
@@ -39,10 +39,10 @@ get.relevanse.question <- function(tool.survey) {
 }
 
 
-children.names <- function(questions, question.name) {
+parents.names <- function(questions, question.name) {
   parse.parents <- function(questions.row) {
     if (is.na(questions.row$parent.survey)) {
-      return(NA)
+      return(c())
     }
     parents <- unlist(strsplit(questions.row$parent.survey, " ")[[1]])
     parents <- unique(parents)
@@ -55,27 +55,69 @@ children.names <- function(questions, question.name) {
   return(parents)
 }
 
-build_tree <- function(questions, question.name) {
+children.names <- function(questions, question.name) {
+  parse.children <- function(questions.row) {
+    if (is.na(questions.row$relevant.survey)) {
+      return(NA)
+    }
+    children <- unlist(strsplit(questions.row$relevant.survey, " ")[[1]])
+    children <- unique(children)
+    return(children)
+  }
+  if (nrow(questions[questions$ref.name == question.name, ]) == 0) {
+    return(c())
+  }
+  children <- parse.children(questions[questions$ref.name == question.name, ])
+  return(children)
+}
+
+build_tree_parents <- function(questions, question.name) {
+  parent.list <- list()
+  
+  parent_names <- parents.names(questions, question.name)
+  if (is.logical(parent_names)) {
+    return(NULL)
+  }
+  if (length(parent_names) == 0 || (length(parent_names) == 1 && parent_names[1] == "NA")) {
+    return(NULL)
+  }
+  for (parent_name in parent_names) {
+    parent_tree <- build_tree_parents(questions, parent_name)
+    parent.list <- append(parent.list, list(parent_tree))
+  }
+  if (length(parent.list) > 0) {
+    main.df <- tibble(
+      name = parent_names,
+      children = parent.list
+    )
+  } else {
+    main.df <- tibble(
+      name = parent_names
+    )
+  }
+  
+  return(main.df)
+}
+
+build_tree_children <- function(questions, question.name) {
   children.list <- list()
   
   child_names <- children.names(questions, question.name)
-  relevant.formula <- questions[questions$ref.name == question.name, ]$relevant
-  
+  if (is.logical(child_names)) {
+    return(NULL)
+  }
   if (length(child_names) == 0 || (length(child_names) == 1 && child_names[1] == "NA")) {
     return(NULL)
   }
   formulas.list <- list()
   for (child_name in child_names) {
-    child_tree <- build_tree(questions, child_name)
+    child_tree <- build_tree_children(questions, child_name)
     children.list <- append(children.list, list(child_tree))
-    formulas.list <- append(formulas.list, list(relevant.formula))
-    
   }
   if (length(children.list) > 0) {
     main.df <- tibble(
       name = child_names,
-      children = children.list,
-      formulas = formulas.list
+      children = children.list
     )
   } else {
     main.df <- tibble(
@@ -106,15 +148,23 @@ parse.formula_full <- function(formula) {
   return(result)
 }
 
-build_matrix <- function(questions, question.name, depth) {
-  child.names <- children.names(questions, question.name)
+build_matrix_parents <- function(questions, question.name, depth) {
+  parents <- parents.names(questions, question.name)
   res.df <- data.frame()
-  for (child in child.names) {
+  
+  if (is.logical(parents)) {
+    return(NULL)
+  }
+  if (length(parents) == 0 || (length(parents) == 1 && parents[1] == "NA")) {
+    return(NULL)
+  }
+  
+  for (parent in parents) {
     formula <- questions[questions$ref.name == question.name, ]$relevant
     if (!is.na(formula)) {
-      df <- data.frame(child = question.name, parent = child, formula=parse.formula_full(formula), depth=depth)
+      df <- data.frame(child = question.name, parent = parent, formula=parse.formula_full(formula), depth=depth)
       res.df <- rbind(res.df, df)
-      df <- build_matrix(questions, child, depth + 1)
+      df <- build_matrix_parents(questions, parent, depth + 1)
       res.df <- rbind(res.df, df)
     }
   }
@@ -127,6 +177,34 @@ build_matrix <- function(questions, question.name, depth) {
   return(res.df)
 }
 
+build_matrix_children <- function(questions, question.name, depth) {
+  children <- children.names(questions, question.name)
+  res.df <- data.frame()
+  
+  if (is.logical(children)) {
+    return(NULL)
+  }
+  if (length(children) == 0 || (length(children) == 1 && children[1] == "NA")) {
+    return(NULL)
+  }
+  
+  for (child in children) {
+    formula <- questions[questions$ref.name == child, ]$relevant
+    if (!is.na(formula)) {
+      df <- data.frame(child = child, parent = question.name, formula=parse.formula_full(formula), depth=depth)
+      res.df <- rbind(res.df, df)
+      df <- build_matrix_children(questions, child, depth + 1)
+      res.df <- rbind(res.df, df)
+    }
+  }
+  row.names(res.df) <- NULL
+  res.df <- res.df %>%
+    arrange(depth)
+  
+  res.df$depth <- as.integer(res.df$depth)
+  res.df <- res.df[!duplicated(res.df), ]
+  return(res.df)
+}
 
 parse.formula <- function(input_string,return='value') {
   pattern_names <- "\\$\\{([^\\}]+)\\}"
@@ -141,5 +219,3 @@ parse.formula <- function(input_string,return='value') {
     return(questions_values)
   }
 }
-
-
