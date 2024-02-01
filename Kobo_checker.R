@@ -50,8 +50,10 @@ ui <- fluidPage(
                ),
                mainPanel(
                  tabsetPanel(
-                   tabPanel("Tree View", echarts4rOutput("tree_chart")),
-                   tabPanel("Relationship Matrix", tableOutput("matrix_table"))
+                   tabPanel("Parents Tree View", echarts4rOutput("tree_chart_parents")),
+                   tabPanel("Children Tree View", echarts4rOutput("tree_chart_children")),
+                   tabPanel("Parents Relationship Matrix", tableOutput("parents_matrix_table")),
+                   tabPanel("Children Relationship Matrix", tableOutput("children_matrix_table"))
                  )
                )
              )
@@ -399,30 +401,55 @@ server <- function(input, output, session) {
       questions <- get.relevanse.question(data.tool())
       question_name <- input$question_name
       if (question_name %in% questions$ref.name) {
-        tree_data <- build_tree(questions, question_name)
-        tree_data <- tibble(
+        tree_data_parents <- build_tree_parents(questions, question_name)
+        tree_data_parents <- tibble(
           name = input$question_name, 
-          children = list(tree_data)
+          children = list(tree_data_parents)
         )
-        matrix_data <- build_matrix(questions, question_name, 0)
         
-        output$tree_chart <- renderEcharts4r({
-          tree_data %>%
+        tree_data_children <- build_tree_children(questions, question_name)
+        tree_data_children <- tibble(
+          name = input$question_name, 
+          children = list(tree_data_children)
+        )
+        
+        matrix_data_parents <- build_matrix_parents(questions, question_name, 0)
+        matrix_data_children <- build_matrix_children(questions, question_name, 0)
+        
+        output$tree_chart_parents <- renderEcharts4r({
+          tree_data_parents %>%
             e_charts() %>% 
             e_tree(orient = "RL", label = list(normal = list(position = "outside")), initialTreeDepth = 5)
         })
         
-        output$matrix_table <- renderTable({
-          matrix_data
+        output$tree_chart_children <- renderEcharts4r({
+          tree_data_children %>%
+            e_charts() %>% 
+            e_tree(orient = "LR", label = list(normal = list(position = "outside")), initialTreeDepth = 5)
         })
+        
+        output$parents_matrix_table <- renderTable({
+          matrix_data_parents
+        })
+        
+        output$children_matrix_table <- renderTable({
+          matrix_data_children
+        })
+        
       } else {
         tree_data <- tibble(
           name = "question wasn't found in the survey",
         )
-        output$tree_chart <- renderEcharts4r({
+        output$tree_chart_parents <- renderEcharts4r({
           tree_data %>%
             e_charts() %>% 
             e_tree(orient = "RL", label = list(normal = list(position = "outside")), initialTreeDepth = 5)
+        })
+        
+        output$tree_chart_children <- renderEcharts4r({
+          tree_data %>%
+            e_charts() %>% 
+            e_tree(orient = "LR", label = list(normal = list(position = "outside")), initialTreeDepth = 5)
         })
       }
       
@@ -432,4 +459,3 @@ server <- function(input, output, session) {
 
 # Run the app
 shinyApp(ui, server)
-
