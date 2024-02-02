@@ -34,10 +34,12 @@ ui <- fluidPage(
              sidebarLayout(
                sidebarPanel(
                  fileInput("file", "Choose your kobo tool", accept = ".xlsx"),
-                 actionButton("processBtn", "Process Data")
+                 actionButton("processBtn", "Process Data"),
+                 width = 3
                ),
                mainPanel(
-                 DTOutput("resultTable")
+                 DTOutput("resultTable"),
+                 width=9
                )
              )
     ),
@@ -46,7 +48,8 @@ ui <- fluidPage(
              sidebarLayout(
                sidebarPanel(
                  selectizeInput("question_name",'Select the question name',choices=NULL),
-                 actionButton("submit_btn", "Submit")
+                 actionButton("submit_btn", "Submit"),
+                 width=3
                ),
                mainPanel(
                  tabsetPanel(
@@ -56,7 +59,8 @@ ui <- fluidPage(
                    tabPanel("Children Relationship Matrix", tableOutput("children_matrix_table")),
                    tabPanel("Constraint Parents Tree View", echarts4rOutput("constraint_tree_chart_parents")),
                    tabPanel("Constraint Children Tree View", echarts4rOutput("constraint_tree_chart_children"))
-                 )
+                 ),
+                 width = 9
                )
              )
     )
@@ -373,10 +377,9 @@ server <- function(input, output, session) {
           extensions = 'Buttons',
           options = list(
             dom = 'lfrtipB',
-            buttons = c("copy", "csv", "pdf"),
+            buttons = c("copy", "excel"),
             pageLength = 100,
-            scrollX=TRUE,
-            autoWidth = TRUE
+            scrollX=TRUE
           )
         )
       })
@@ -390,7 +393,7 @@ server <- function(input, output, session) {
     
     names_list <-  data.tool() %>% filter(grepl('select_',type)) %>% pull(name)
     
-    updateSelectizeInput(session, 'question_name', choices = names_list, server = TRUE)
+    updateSelectizeInput(session, 'question_name', choices = names_list, server = TRUE, selected="")
   })
   
   
