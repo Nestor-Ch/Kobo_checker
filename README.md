@@ -49,3 +49,11 @@ Represent all edges from the Parents Tree View in the table format.<br>
 #### Children Relationship Matrix
 Represent all edges from the Children Tree View in the table format.<br>
 Table has the same structure as Parents Relationship Matrix.
+
+#### Constraint Parents Tree View
+Shows all the questions that led to the appearance of the input question via constraint formula.<br>
+The tree is shown in right-to-left format with the input question at the root.
+
+#### Constraint Children Tree View
+Shows all the questions which are dependent on the input question via constraint formula.<br>
+The tree is shown in left-to-right format with the input question at the root.
