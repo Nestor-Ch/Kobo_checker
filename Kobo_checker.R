@@ -49,6 +49,7 @@ ui <- fluidPage(
                sidebarPanel(
                  selectizeInput("question_name",'Select the question name',choices=NULL),
                  actionButton("submit_btn", "Submit"),
+                 checkboxInput("calculate", "Include calculate questions"),
                  width=3
                ),
                mainPanel(
@@ -400,10 +401,15 @@ server <- function(input, output, session) {
   observeEvent({
     input$question_name
     input$submit_btn
-    }, {
+  }, {
     if (!is.null(data.tool())) {
-
-      questions <- get.relevanse.question(data.tool())
+      
+      if (input$calculate) {
+        questions <- get.relevanse.question(data.tool(), c("note"))
+      } else {
+        questions <- get.relevanse.question(data.tool())
+      }
+      
       questions_constraints <- get.constraint.question(data.tool())
       question_name <- input$question_name
       if (question_name %in% questions$ref.name) {
@@ -442,7 +448,7 @@ server <- function(input, output, session) {
             children = list()
           )
         }
-         
+        
         
         matrix_data_parents <- build_matrix_parents(questions, question_name, 0)
         matrix_data_children <- build_matrix_children(questions, question_name, 0)

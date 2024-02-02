@@ -1,8 +1,8 @@
-get.relevanse.question <- function(tool.survey) {
+get.relevanse.question <- function(tool.survey, excluded_questions = c("calculate", "note")) {
   questions <- data.frame(ref.name = ifelse(!grepl("group", tool.survey$type), tool.survey$name, NA), type=tool.survey$type)
   questions <- na.omit(questions)
   
-  questions <- questions[!(questions$type %in% c("calculate", "note")),]
+  questions <- questions[!(questions$type %in% excluded_questions),]
   
   questions <- questions %>%
     dplyr::rowwise() %>%
