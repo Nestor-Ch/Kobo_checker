@@ -396,7 +396,22 @@ server <- function(input, output, session) {
     
     updateSelectizeInput(session, 'question_name', choices = names_list, server = TRUE, selected="")
   })
-  
+
+    
+  observeEvent(input$calculate, {
+    if (!is.null(data.tool())) {
+      if (input$calculate == T) {
+        names_list <- data.tool() %>%
+          filter(grepl('^(select_|calculate)', type)) %>%
+          pull(name)
+        
+      } else {
+        names_list <- data.tool() %>% filter(grepl('select_', type)) %>% pull(name)
+      }
+      
+      updateSelectizeInput(session, 'question_name', choices = names_list, server = TRUE, selected="")
+    }
+  })  
   
   observeEvent({
     input$question_name
