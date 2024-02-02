@@ -1,6 +1,8 @@
 get.relevanse.question <- function(tool.survey) {
-  questions <- data.frame(ref.name = ifelse(!grepl("group", tool.survey$type), tool.survey$name, NA))
+  questions <- data.frame(ref.name = ifelse(!grepl("group", tool.survey$type), tool.survey$name, NA), type=tool.survey$type)
   questions <- na.omit(questions)
+  
+  questions <- questions[!(questions$type %in% c("calculate", "note")),]
   
   questions <- questions %>%
     dplyr::rowwise() %>%
@@ -9,6 +11,7 @@ get.relevanse.question <- function(tool.survey) {
         ifelse(length(.) == 0, NA, .)
       pattern <- "\\$\\{([^\\}]+)\\}"
       result <- gsub("\\$\\{|\\}", "", str_extract_all(relevance.condition, pattern)[[1]])
+      result <- result[result %in% questions$ref.name]
       relevance_str <-paste(result, collapse = ' ')
       return(ifelse(relevance_str == "", NA, relevance_str))
     })) %>%
