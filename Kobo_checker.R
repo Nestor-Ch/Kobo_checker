@@ -44,7 +44,6 @@ ui <- fluidPage(
              )
     ),
     tabPanel("Question Inspection",
-             titlePanel("Survey Question Inspection"),
              sidebarLayout(
                sidebarPanel(
                  selectizeInput("question_name",'Select the question name',choices=NULL),
