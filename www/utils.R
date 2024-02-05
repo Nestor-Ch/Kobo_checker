@@ -186,7 +186,8 @@ parse.formula_full <- function(formula) {
   
   result <- list()
   for (i in 1:length(questions_names)) {
-    result <- append(result, list(questions_names[i], "==", questions_values[i]))
+    value <- ifelse(questions_values[i] == '', '""', questions_values[i])
+    result <- append(result, list(questions_names[i], "==", value))
     if (i != length(questions_names)) {
       result <- append(result, conditions[i])
     }
@@ -212,6 +213,7 @@ build_matrix_parents <- function(questions, question.name, depth) {
   
   for (parent in parents) {
     formula <- questions[questions$ref.name == question.name, ]$relevant
+    print(formula)
     if (!is.na(formula)) {
       df <- data.frame(child = question.name, parent = parent, formula=parse.formula_full(formula), depth=depth)
       res.df <- rbind(res.df, df)
