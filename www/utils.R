@@ -215,7 +215,7 @@ build_matrix_parents <- function(questions, question.name, depth) {
     formula <- questions[questions$ref.name == question.name, ]$relevant
     print(formula)
     if (!is.na(formula)) {
-      df <- data.frame(child = question.name, parent = parent, formula=parse.formula_full(formula), depth=depth)
+      df <- data.frame(child = question.name, parent = parent, formula=formula, depth=depth)
       res.df <- rbind(res.df, df)
       df <- build_matrix_parents(questions, parent, depth + 1)
       res.df <- rbind(res.df, df)
@@ -247,7 +247,7 @@ build_matrix_children <- function(questions, question.name, depth) {
   for (child in children) {
     formula <- questions[questions$ref.name == child, ]$relevant
     if (!is.na(formula)) {
-      df <- data.frame(child = child, parent = question.name, formula=parse.formula_full(formula), depth=depth)
+      df <- data.frame(child = child, parent = question.name, formula=formula, depth=depth)
       res.df <- rbind(res.df, df)
       df <- build_matrix_children(questions, child, depth + 1)
       res.df <- rbind(res.df, df)
