@@ -6,8 +6,11 @@ library(utilityR)
 library(readxl)
 library(data.table)
 library(stringdist)
+library(visNetwork)
+library(plotly)
 
 source("www/utils.R")
+source("www/utils_network.R")
 
 
 ui <- fluidPage(
@@ -48,7 +51,7 @@ ui <- fluidPage(
                sidebarPanel(
                  selectizeInput("question_name",'Select the question name',choices=NULL),
                  actionButton("submit_btn", "Submit"),
-                 checkboxInput("calculate", "Include calculate questions"),
+                 checkboxInput("calculate_question", "Include calculate questions"),
                  width=3
                ),
                mainPanel(
@@ -63,9 +66,28 @@ ui <- fluidPage(
                  width = 9
                )
              )
+    ),
+    tabPanel("Survey Inspection",
+             sidebarLayout(
+               sidebarPanel(
+                 selectizeInput("question_name_left", 'Select the question name for the left bound', choices = NULL),
+                 selectizeInput("question_name_right", 'Select the question name for the left bound', choices = NULL),
+                 actionButton("submit_btn_survey_overview", "Submit"),
+                 checkboxInput("calculate_survey", "Include calculate questions"),
+                 width = 3
+               ),
+               mainPanel(
+                 tabsetPanel(
+                   tabPanel("Survey overview", visNetworkOutput("survey_overview"), height = 20)
+                 ),
+                 width = 9,
+                 height = 20
+               )
+             )
     )
   )
 )
+    
 
 
 # Server
@@ -391,15 +413,49 @@ server <- function(input, output, session) {
   observeEvent(input$processBtn, {
     req(!is.null(data.tool()))
     
-    names_list <-  data.tool() %>% filter(grepl('select_',type)) %>% pull(name)
+    names_list <- data.tool() %>% filter(grepl('select_',type)) %>% pull(name)
     
     updateSelectizeInput(session, 'question_name', choices = names_list, server = TRUE, selected="")
+    updateSelectizeInput(session, 'question_name_left', choices = names_list, server = TRUE, selected="")
+    updateSelectizeInput(session, 'question_name_right', choices = names_list, server = TRUE, selected="")
+    
+  })
+  
+  observeEvent(input$submit_btn_survey_overview, {
+    
+    if (!is.null(data.tool())) {
+      left.question <- input$question_name_left
+      right.question <- input$question_name_right
+      
+      if (input$calculate_survey == T) {
+          survey.visualisation <- visualise.survey(data.tool(), left.question, right.question, c("note"))
+      } else (
+        survey.visualisation <- visualise.survey(data.tool(), left.question, right.question)
+      )
+      
+      if (is.character(survey.visualisation)) {
+        nodes <- data.frame(id = 1)
+        edges <- data.frame(from = survey.visualisation, to = survey.visualisation)
+        nodes$title <- survey.visualisation
+        nodes$label <-survey.visualisation
+        
+        survey.visualisation <- visNetwork(nodes, edges)
+      }
+      
+      output$survey_overview <- renderVisNetwork({
+        survey.visualisation
+      })
+      
+    } else {
+      1
+    }
+    
   })
 
     
-  observeEvent(input$calculate, {
+  observeEvent(input$calculate_question, {
     if (!is.null(data.tool())) {
-      if (input$calculate == T) {
+      if (input$calculate_question == T) {
         names_list <- data.tool() %>%
           filter(grepl('^(select_|calculate)', type)) %>%
           pull(name)
@@ -410,6 +466,21 @@ server <- function(input, output, session) {
       
       updateSelectizeInput(session, 'question_name', choices = names_list, server = TRUE, selected="")
     }
+  }) 
+  
+  observeEvent(input$calculate_survey, {
+    if (!is.null(data.tool())) {
+      if (input$calculate_survey == T) {
+        names_list <- data.tool() %>%
+          filter(grepl('^(select_|calculate)', type)) %>%
+          pull(name)
+      } else {
+        names_list <- data.tool() %>% filter(grepl('select_', type)) %>% pull(name)
+      }
+      
+      updateSelectizeInput(session, 'question_name_left', choices = names_list, server = TRUE, selected="")
+      updateSelectizeInput(session, 'question_name_right', choices = names_list, server = TRUE, selected="")
+    }
   })  
   
   observeEvent({
@@ -418,7 +489,7 @@ server <- function(input, output, session) {
   }, {
     if (!is.null(data.tool())) {
       
-      if (input$calculate) {
+      if (input$calculate_question) {
         questions <- get.relevanse.question(data.tool(), c("note"))
       } else {
         questions <- get.relevanse.question(data.tool())
