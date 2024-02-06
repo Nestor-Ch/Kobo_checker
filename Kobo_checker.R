@@ -71,7 +71,7 @@ ui <- fluidPage(
              sidebarLayout(
                sidebarPanel(
                  selectizeInput("question_name_left", 'Select the question name for the left bound', choices = NULL),
-                 selectizeInput("question_name_right", 'Select the question name for the left bound', choices = NULL),
+                 selectizeInput("question_name_right", 'Select the question name for the right bound', choices = NULL),
                  actionButton("submit_btn_survey_overview", "Submit"),
                  checkboxInput("calculate_survey", "Include calculate questions"),
                  width = 3
