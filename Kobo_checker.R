@@ -8,6 +8,7 @@ library(data.table)
 library(stringdist)
 library(visNetwork)
 library(plotly)
+library(stringr)
 
 source("www/utils.R")
 source("www/utils_network.R")
@@ -120,9 +121,11 @@ server <- function(input, output, session) {
       labels <- label()
       
       kobo_data.t <- kobo_data.t %>% 
+        rownames_to_column(var='rownames') %>% 
         filter(!grepl('\\bsettlement|\\brectangle\\b|\\brectangles\\b|geo_location|\\bpoint\\b|\\bhub\\b|raion|hromada|oblast|center_idp',list_name))
       
       kobo_data.c <- kobo_data.c %>% 
+        rownames_to_column(var='rownames') %>% 
         filter(!grepl('\\bsettlement|\\brectangle\\b|\\brectangles\\b|geo_location|\\bpoint\\b|\\bhub\\b|raion|hromada|oblast|center_idp',list_name),
                !grepl("^UKRs\\d+$", name),
                !grepl("^UA\\d+$", name))
@@ -131,7 +134,6 @@ server <- function(input, output, session) {
       # test for non eng in tool survey
       non_eng.t <- kobo_data.t %>% 
         select(name, relevant,type) %>% 
-        rownames_to_column(var='rownames') %>% 
         pivot_longer(cols= name:type, names_to = 'column', values_to = 'value') %>% 
         filter(!is.na(value),
                !value==' ',
@@ -147,7 +149,6 @@ server <- function(input, output, session) {
       # test for non eng in tool survey
       non_eng.c <- kobo_data.c %>% 
         select(list_name,!!sym(labels),name) %>% 
-        rownames_to_column(var='rownames') %>% 
         pivot_longer(cols= list_name:name, names_to = 'column', values_to = 'value') %>% 
         filter(!is.na(value),
                !value==' ',
@@ -168,7 +169,6 @@ server <- function(input, output, session) {
       # test for leading/trailing spaces in tool survey
       add.space.t <- kobo_data.t %>% 
         select(name) %>% 
-        rownames_to_column(var='rownames') %>% 
         rename(value=name) %>% 
         filter(!is.na(value),
                !value==' ',
@@ -182,7 +182,6 @@ server <- function(input, output, session) {
       add.space.c <- kobo_data.c %>% 
         filter(!grepl('geo',list_name)) %>% 
         select(name,!!sym(labels)) %>% 
-        rownames_to_column(var='rownames') %>% 
         pivot_longer(cols= name:!!sym(labels), names_to = 'column', values_to = 'value') %>% 
         filter(!is.na(value),
                !value==' ',
@@ -201,10 +200,9 @@ server <- function(input, output, session) {
       other_check <- kobo_data.t %>% 
         filter(type=='text') %>% 
         filter(!is.na(relevant)) %>% 
-        select(name,relevant) %>% 
-        rownames_to_column(var='rownames') %>% 
+        select(name,relevant,rownames) %>% 
         mutate(single_rel = relevant) %>% 
-        tidyr::separate_rows(single_rel,sep='\\bor|\\band') %>% 
+        tidyr::separate_rows(single_rel,sep='\\bor\\b|\\band\\b') %>% 
         mutate(single_rel=str_squish(single_rel)) %>% 
         filter(!grepl('not\\(selected',single_rel)) %>% 
         mutate(n_relevancies=str_count(relevant,'\\{'),
@@ -257,19 +255,23 @@ server <- function(input, output, session) {
       
       
       # check if all relevances match the available choices
-      
       check_rel <- kobo_data.t %>% 
-        rownames_to_column(var='rownames') %>% 
         select(rownames,name, type, relevant) %>% 
         filter(!is.na(relevant),
                grepl('select_multiple|select_one',type)) %>% 
-        mutate(single_rel = relevant) %>% 
-        tidyr::separate_rows(single_rel,sep='\\bor|\\band') %>% 
+        mutate(single_rel = str_squish(relevant)) %>% 
+        tidyr::separate_rows(single_rel,sep="(?<!\\.|\\})\\,") %>% 
+        tidyr::separate_rows(single_rel,sep='\\bor\\b|\\band\\b') %>% 
         filter(grepl('selected',single_rel))
+      
       if(nrow(check_rel)>0){
         check_rel <- check_rel %>% 
           mutate(questions_values = sapply(single_rel, parse.formula),
-                 question_names = sapply(single_rel, function(x){parse.formula(x,return='name')})) %>% 
+                 question_names = sapply(single_rel, function(x){parse.formula(x,return='name')})
+                 ) %>% 
+          unnest_longer(questions_values:question_names) %>% 
+          filter(!grepl("^UKRs\\d+$", questions_values),
+                 !grepl("^UA\\d+$", questions_values)) %>% 
           left_join(kobo_data.t %>% select(name,list_name) %>% rename(question_names=name)) %>% 
           rowwise() %>% 
           mutate(check = 
@@ -287,18 +289,21 @@ server <- function(input, output, session) {
       
       # check constraints for having existing values
       check_con <- kobo_data.t %>% 
-        rownames_to_column(var='rownames') %>% 
         select(rownames,name, type, constraint) %>% 
         filter(!is.na(constraint),
                grepl('select_multiple|select_one',type)) %>% 
-        mutate(single_const = constraint) %>% 
-        tidyr::separate_rows(single_const,sep='\\bor|\\band') %>% 
+        mutate(single_const = str_squish(constraint)) %>% 
+        tidyr::separate_rows(single_const,sep="(?<!\\.|\\})\\,") %>% 
+        tidyr::separate_rows(single_const,sep='\\bor\\b|\\band\\b') %>% 
         filter(grepl('selected\\(\\$',single_const))
       
       if(nrow(check_con)>0){
         check_con <- check_con %>% 
           mutate(questions_values = sapply(single_const, parse.formula),
                  question_names = sapply(single_const, function(x){parse.formula(x,return='name')})) %>% 
+          unnest_longer(questions_values:question_names) %>% 
+          filter(!grepl("^UKRs\\d+$", questions_values),
+                 !grepl("^UA\\d+$", questions_values)) %>% 
           left_join(kobo_data.t %>% select(name,list_name) %>% rename(question_names=name)) %>% 
           rowwise() %>% 
           mutate(check = 
@@ -313,10 +318,11 @@ server <- function(input, output, session) {
           mutate(priority = 'First priority')
       }else{check_con <- data.frame()}
       
+
+      
       # Duplicate choices in list_choices
       
       dupl_choices <- kobo_data.c %>%
-        rownames_to_column(var='rownames') %>% 
         group_by(list_name,name) %>%
         mutate(dupobs = n()) %>%
         filter(dupobs>1) %>% 
@@ -337,7 +343,6 @@ server <- function(input, output, session) {
       
       # Check if None is in constraint if it's present in the list of choices
       non_check <- kobo_data.t %>% 
-        rownames_to_column(var='rownames') %>% 
         select(rownames,list_name,constraint) %>% 
         rowwise() %>% 
         mutate(check = any(grepl('none', kobo_data.c[kobo_data.c$list_name %in% list_name,]$name))) %>%
@@ -359,7 +364,6 @@ server <- function(input, output, session) {
       
       label_issues <- kobo_data.c %>% 
         tibble() %>% 
-        rownames_to_column(var='rownames') %>% 
         select(list_name,rownames,name,!!sym(labels)) %>% 
         mutate(name = tolower(gsub('_',' ',name)),
                label = tolower(gsub('_',' ',!!sym(labels))),
@@ -391,6 +395,8 @@ server <- function(input, output, session) {
       if(all(is.na(processed_data$cyrillic_char))){
         processed_data <- processed_data %>% select(-cyrillic_char)
       }
+      
+      processed_data <- processed_data %>% mutate(across(everything(), as.character))
       
       output$resultTable <- renderDT({
         DT::datatable(
