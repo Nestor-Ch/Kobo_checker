@@ -29,7 +29,7 @@ visualise.survey <- function(tool.survey, left.question, right.question, exclude
         links <- bind_rows(links, data.frame(
           from = parents[j],
           to = group.questions$ref.name[i],
-          relevant = parse.formula_full(group.questions$relevant[i]),
+          relevant = group.questions$relevant[i],
           stringsAsFactors = FALSE
         ))
       }
