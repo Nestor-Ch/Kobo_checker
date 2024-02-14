@@ -1,6 +1,6 @@
 visualise.survey <- function(tool.survey, left.question, right.question, excluded_questions = c("calculate", "note")) {
-  questions <- get.relevanse.question(tool.survey, c("note"))
-  questions <- questions[!(questions$type %in% excluded_questions),]
+  questions <- get.relevanse.question(tool.survey, excluded_questions)
+  # questions <- questions[!(questions$type %in% excluded_questions),]
   
   if (!left.question %in% questions$ref.name) return("left question not found")
   if (!right.question %in% questions$ref.name) return("right question not found")
@@ -18,6 +18,7 @@ visualise.survey <- function(tool.survey, left.question, right.question, exclude
     df <- data.frame(
       id = group.questions$ref.name[i],
       question = group.questions$ref.name[i],
+      type = ifelse(group.questions$type[i] == "group", "group", "question"),
       stringsAsFactors = FALSE
     )
     nodes <- bind_rows(nodes, df)
@@ -48,7 +49,7 @@ visualise.survey <- function(tool.survey, left.question, right.question, exclude
   vis.nodes$size   <- 20
   vis.nodes$borderWidth <- 1
   
-  # vis.nodes$color.background <- c("slategrey", "tomato", "gold")[nodes$media.type]
+  vis.nodes$color.background <- ifelse(vis.nodes$type == "group", "gold", "lightblue")
   vis.nodes$color.border <- "black"
   vis.nodes$color.highlight.background <- "orange"
   vis.nodes$color.highlight.border <- "darkred"
@@ -60,8 +61,13 @@ visualise.survey <- function(tool.survey, left.question, right.question, exclude
   vis.links$shadow <- FALSE
   vis.links$title <- vis.links$relevant
   
-  visnet <- visNetwork(vis.nodes, vis.links)
+  vis.nodes$group <- vis.nodes$type
   
+  visnet <- visNetwork(vis.nodes, vis.links) %>%
+    visGroups(groupname = "group", color = list(border = "black", background = "gold")) %>%
+    visGroups(groupname = "question", color = list(border = "black", background = "lightblue")) %>%
+    visLegend(main="Legend", position="left", ncol=1, width = 0.1, zoom = FALSE)
+
   visnet <- visnet %>%
     visInteraction(dragNodes = FALSE) %>%
     visEdges(
