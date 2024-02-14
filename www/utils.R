@@ -1,5 +1,6 @@
 get.relevanse.question <- function(tool.survey, excluded_questions = c("calculate", "note")) {
-  questions <- data.frame(ref.name = ifelse(!grepl("group", tool.survey$type), tool.survey$name, NA), type=tool.survey$type)
+  questions <- data.frame(ref.name = tool.survey$name, type=ifelse("begin_group" == tool.survey$type, "group", tool.survey$type))
+  questions <- questions[questions$type != "end_group",]
   questions <- na.omit(questions)
   
   questions <- questions[!(questions$type %in% excluded_questions),]
@@ -161,6 +162,11 @@ build_tree_children <- function(questions, question.name) {
   for (child_name in child_names) {
     child_tree <- build_tree_children(questions, child_name)
     children.list <- append(children.list, list(child_tree))
+  }
+  for (i in 1:length(child_names)) {
+    if (questions[questions$ref.name == child_names[i], ]$type[1] == "group") {
+      child_names[i] <- paste0(child_names[i], " (group)")
+    }
   }
   if (length(children.list) > 0) {
     main.df <- tibble(
