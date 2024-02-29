@@ -43,7 +43,7 @@ get.relevanse.question <- function(tool.survey, excluded_questions = c("calculat
 }
 
 get.constraint.question <- function(tool.survey) {
-  questions <- data.frame(ref.name = ifelse(!grepl("group", tool.survey$type), tool.survey$name, NA))
+  questions <- data.frame(ref.name = ifelse(!grepl("group", tool.survey$type), tool.survey$name, NA), type=ifelse("begin_group" == tool.survey$type, "group", tool.survey$type))
   questions <- na.omit(questions)
   
   questions <- questions %>%
@@ -163,9 +163,14 @@ build_tree_children <- function(questions, question.name) {
     child_tree <- build_tree_children(questions, child_name)
     children.list <- append(children.list, list(child_tree))
   }
-  for (i in 1:length(child_names)) {
-    if (questions[questions$ref.name == child_names[i], ]$type[1] == "group") {
-      child_names[i] <- paste0(child_names[i], " (group)")
+  if (length(child_names) != 0) {
+    for (i in 1:length(child_names)) {
+      if (is.na(child_names[i])) {
+        next
+      }
+      if (questions[questions$ref.name == child_names[i], ]$type[1] == "group") {
+        child_names[i] <- paste0(child_names[i], " (group)")
+      }
     }
   }
   if (length(children.list) > 0) {
@@ -219,7 +224,6 @@ build_matrix_parents <- function(questions, question.name, depth) {
   
   for (parent in parents) {
     formula <- questions[questions$ref.name == question.name, ]$relevant
-    print(formula)
     if (!is.na(formula)) {
       df <- data.frame(child = question.name, parent = parent, formula=formula, depth=depth)
       res.df <- rbind(res.df, df)
