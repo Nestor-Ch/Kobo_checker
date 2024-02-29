@@ -62,7 +62,7 @@ ui <- fluidPage(
                    tabPanel("Parents Relationship Matrix", tableOutput("parents_matrix_table")),
                    tabPanel("Children Relationship Matrix", tableOutput("children_matrix_table")),
                    tabPanel("Constraint Parents Tree View", echarts4rOutput("constraint_tree_chart_parents")),
-                   tabPanel("Constraint Children Tree View", echarts4rOutput("constraint_tree_chart_children"))
+                   tabPanel("Constraint Children Tree View", echarts4rOutput("constraint_tree_chart_children")),
                  ),
                  width = 9
                )
@@ -494,13 +494,11 @@ server <- function(input, output, session) {
     input$submit_btn
   }, {
     if (!is.null(data.tool())) {
-      
       if (input$calculate_question) {
         questions <- get.relevanse.question(data.tool(), c("note"))
       } else {
         questions <- get.relevanse.question(data.tool())
       }
-      
       questions_constraints <- get.constraint.question(data.tool())
       question_name <- input$question_name
       if (question_name %in% questions$ref.name) {
@@ -512,17 +510,15 @@ server <- function(input, output, session) {
         
         tree_data_children <- build_tree_children(questions, question_name)
         tree_data_children <- tibble(
-          name = input$question_name, 
+          name = input$question_name,
           children = list(tree_data_children)
         )
-        
         if (question_name %in% questions_constraints$ref.name) {
           constraint_tree_data_parents <- build_tree_parents(questions_constraints, question_name)
           constraint_tree_data_parents <- tibble(
             name = input$question_name, 
             children = list(constraint_tree_data_parents)
           )
-          
           constraint_tree_data_children <- build_tree_children(questions_constraints, question_name)
           constraint_tree_data_children <- tibble(
             name = input$question_name, 
@@ -539,8 +535,6 @@ server <- function(input, output, session) {
             children = list()
           )
         }
-        
-        
         matrix_data_parents <- build_matrix_parents(questions, question_name, 0)
         matrix_data_children <- build_matrix_children(questions, question_name, 0)
         
@@ -570,11 +564,11 @@ server <- function(input, output, session) {
         
         output$parents_matrix_table <- renderTable({
           matrix_data_parents
-        })
+        }, width = "90%")
         
         output$children_matrix_table <- renderTable({
           matrix_data_children
-        })
+        }, width = "90%")
         
       } else {
         tree_data <- tibble(
