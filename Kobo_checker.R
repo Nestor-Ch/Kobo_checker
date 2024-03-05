@@ -62,7 +62,7 @@ ui <- fluidPage(
                    tabPanel("Parents Relationship Matrix", tableOutput("parents_matrix_table")),
                    tabPanel("Children Relationship Matrix", tableOutput("children_matrix_table")),
                    tabPanel("Constraint Parents Tree View", echarts4rOutput("constraint_tree_chart_parents")),
-                   tabPanel("Constraint Children Tree View", echarts4rOutput("constraint_tree_chart_children")),
+                   tabPanel("Constraint Children Tree View", echarts4rOutput("constraint_tree_chart_children"))
                  ),
                  width = 9
                )
@@ -133,7 +133,7 @@ server <- function(input, output, session) {
       
       # test for non eng in tool survey
       non_eng.t <- kobo_data.t %>% 
-        select(name, relevant,type) %>% 
+        select(name, relevant,type,rownames) %>% 
         pivot_longer(cols= name:type, names_to = 'column', values_to = 'value') %>% 
         filter(!is.na(value),
                !value==' ',
@@ -148,7 +148,7 @@ server <- function(input, output, session) {
       
       # test for non eng in tool survey
       non_eng.c <- kobo_data.c %>% 
-        select(list_name,!!sym(labels),name) %>% 
+        select(list_name,!!sym(labels),name,rownames) %>% 
         pivot_longer(cols= list_name:name, names_to = 'column', values_to = 'value') %>% 
         filter(!is.na(value),
                !value==' ',
@@ -168,7 +168,7 @@ server <- function(input, output, session) {
       
       # test for leading/trailing spaces in tool survey
       add.space.t <- kobo_data.t %>% 
-        select(name) %>% 
+        select(name,rownames) %>% 
         rename(value=name) %>% 
         filter(!is.na(value),
                !value==' ',
@@ -178,10 +178,10 @@ server <- function(input, output, session) {
                                                                     file = 'tool.survey')}
       
       
-      # test for leading/trailing spaces in tool survey
+      # test for leading/trailing spaces in tool choices
       add.space.c <- kobo_data.c %>% 
         filter(!grepl('geo',list_name)) %>% 
-        select(name,!!sym(labels)) %>% 
+        select(name,!!sym(labels),rownames) %>% 
         pivot_longer(cols= name:!!sym(labels), names_to = 'column', values_to = 'value') %>% 
         filter(!is.na(value),
                !value==' ',
@@ -319,6 +319,22 @@ server <- function(input, output, session) {
       }else{check_con <- data.frame()}
       
 
+      # check if all list_choices are in the choices sheet
+      
+      missing_names <- setdiff(kobo_data.c$list_name, kobo_data.t$list_name)
+      
+      print(length(missing_names))
+      if(length(missing_names)>0){
+        missing_list_names <- kobo_data.c %>% 
+          filter(list_name %in% missing_names) %>% 
+          select(rownames,list_name) %>%
+          distinct(list_name, .keep_all = T) %>% 
+          rename(value = list_name) %>% 
+          mutate(column = 'list_name',
+                 issue = paste('list_name',value,'is not used in the survey sheet'),
+                 file = 'tool.choices')%>% 
+          mutate(priority = 'Second priority')
+      }else{missing_list_names <- data.frame()}
       
       # Duplicate choices in list_choices
       
@@ -343,6 +359,7 @@ server <- function(input, output, session) {
       
       # Check if None is in constraint if it's present in the list of choices
       non_check <- kobo_data.t %>% 
+        filter(grepl('select_multiple',type)) %>% 
         select(rownames,list_name,constraint) %>% 
         rowwise() %>% 
         mutate(check = any(grepl('none', kobo_data.c[kobo_data.c$list_name %in% list_name,]$name))) %>%
@@ -388,7 +405,8 @@ server <- function(input, output, session) {
       
       
       processed_data <- bind_rows(other_checks,add.space,non_eng,check_rel,check_con,
-                                  dupl_choices,check_con,check_rel,non_check,label_issues) %>% 
+                                  dupl_choices,check_con,check_rel,non_check,label_issues,
+                                  missing_list_names) %>% 
         relocate(file) %>% 
         mutate(rownames = as.numeric(rownames)+1)
       
