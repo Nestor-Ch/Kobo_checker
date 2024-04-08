@@ -1,1 +1,0 @@
-grepl("(blah)|(\\bother\\b)",' other ')

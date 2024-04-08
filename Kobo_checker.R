@@ -88,7 +88,7 @@ ui <- fluidPage(
     )
   )
 )
-    
+
 
 
 # Server
@@ -110,26 +110,99 @@ server <- function(input, output, session) {
     labels <-label() 
     data.tool(load.tool.survey(input$file$datapath,labels,keep_cols = T))
     data.choices(load.tool.choices(filename_tool = input$file$datapath,
-                                   label_colname = labels))
+                                   label_colname = labels,keep_cols = T))
   })
   
   # Process data and update table
   observeEvent(input$processBtn, {
+    
+    showModal(
+      modalDialog(
+        title = "Processing the tool",
+        "Your tool is getting processed",
+        footer = NULL,
+        easyClose = TRUE
+      )
+    )
+    
+    
     if (!is.null(data.tool())) {
-      kobo_data.t <- data.tool()
-      kobo_data.c <- data.choices()
+      kobo_data.tool <- data.tool()
+      kobo_data.choices <- data.choices()
       labels <- label()
       
-      kobo_data.t <- kobo_data.t %>% 
+      kobo_data.t <- kobo_data.tool %>% 
         rownames_to_column(var='rownames') %>% 
         filter(!grepl('\\bsettlement|\\brectangle\\b|\\brectangles\\b|geo_location|\\bpoint\\b|\\bhub\\b|raion|hromada|oblast|center_idp',list_name))
       
-      kobo_data.c <- kobo_data.c %>% 
+      # get only geo list names
+      kobo_data.c.geo <- kobo_data.choices %>% 
+        rownames_to_column(var='rownames') %>% 
+        filter(grepl('raion|hromada|oblast',list_name))
+      
+      # get everything else
+      kobo_data.c <- kobo_data.choices %>% 
         rownames_to_column(var='rownames') %>% 
         filter(!grepl('\\bsettlement|\\brectangle\\b|\\brectangles\\b|geo_location|\\bpoint\\b|\\bhub\\b|raion|hromada|oblast|center_idp',list_name),
                !grepl("^UKRs\\d+$", name),
                !grepl("^UA\\d+$", name))
       
+      
+      # test if all geo names are p codes
+      wrong_geo_entries <- kobo_data.c.geo %>% 
+        select(name,rownames) %>% 
+        filter(!grepl('^UA',name)) 
+      
+      if(nrow(wrong_geo_entries)>0){wrong_geo_entries <- wrong_geo_entries %>% 
+        mutate(issue = 'Geographic list_names added but names are not p-codes',
+               file = 'tool.choices',
+               column = 'name',
+               priority = 'First priority')%>% 
+        rename(value = name)
+      }else{
+        wrong_geo_entries <- data.frame()
+      }
+      
+      # check if all labels are present
+      
+      # survey page
+      labels_check.t <- kobo_data.t %>% 
+        select(rownames, starts_with('label::')) %>% 
+        filter(rowSums(is.na(select(., starts_with('label::')))) < ncol(select(., starts_with('label::')))) %>% 
+        filter(rowSums(is.na(.))>0) %>% 
+        select(any_of(c("rownames", names(.)[colSums(is.na(.)) > 0])))
+      
+      
+      if(nrow(labels_check.t)>0){
+        labels_check.t <- labels_check.t %>% 
+          pivot_longer(cols=select(.,starts_with('label::')) %>% names(), names_to = 'column',values_to = 'value') %>% 
+          filter(is.na(value)) %>% 
+          mutate(issue = 'Missing label',
+                 file = 'tool.survey',
+                 priority = 'First priority')
+      }else{
+        labels_check.t <- data.frame()
+      }
+      
+      # choices page
+      
+      labels_check.c <- kobo_data.c %>% 
+        select(rownames, starts_with('label::')) %>% 
+        filter(rowSums(is.na(select(., starts_with('label::')))) < ncol(select(., starts_with('label::')))) %>% 
+        filter(rowSums(is.na(.))>0) %>% 
+        select(any_of(c("rownames", names(.)[colSums(is.na(.)) > 0])))
+      
+      
+      if(nrow(labels_check.c)>0){
+        labels_check.c <- labels_check.c %>% 
+          pivot_longer(cols=select(.,starts_with('label::')) %>% names(), names_to = 'column',values_to = 'value') %>%
+          filter(is.na(value)) %>% 
+          mutate(issue = 'Missing label',
+                 file = 'tool.choices',
+                 priority = 'First priority')
+      }else{
+        labels_check.c <- data.frame()
+      }
       
       # test for non eng in tool survey
       non_eng.t <- kobo_data.t %>% 
@@ -268,7 +341,7 @@ server <- function(input, output, session) {
         check_rel <- check_rel %>% 
           mutate(questions_values = sapply(single_rel, parse.formula),
                  question_names = sapply(single_rel, function(x){parse.formula(x,return='name')})
-                 ) %>% 
+          ) %>% 
           unnest_longer(questions_values:question_names) %>% 
           filter(!grepl("^UKRs\\d+$", questions_values),
                  !grepl("^UA\\d+$", questions_values)) %>% 
@@ -318,12 +391,11 @@ server <- function(input, output, session) {
           mutate(priority = 'First priority')
       }else{check_con <- data.frame()}
       
-
+      
       # check if all list_choices are in the choices sheet
       
       missing_names <- setdiff(kobo_data.c$list_name, kobo_data.t$list_name)
       
-      print(length(missing_names))
       if(length(missing_names)>0){
         missing_list_names <- kobo_data.c %>% 
           filter(list_name %in% missing_names) %>% 
@@ -406,9 +478,11 @@ server <- function(input, output, session) {
       
       processed_data <- bind_rows(other_checks,add.space,non_eng,check_rel,check_con,
                                   dupl_choices,check_con,check_rel,non_check,label_issues,
-                                  missing_list_names) %>% 
+                                  missing_list_names,wrong_geo_entries,
+                                  labels_check.c,labels_check.t) %>% 
         relocate(file) %>% 
-        mutate(rownames = as.numeric(rownames)+1)
+        mutate(rownames = as.numeric(rownames)+1) %>% 
+        arrange(priority)
       
       if(all(is.na(processed_data$cyrillic_char))){
         processed_data <- processed_data %>% select(-cyrillic_char)
@@ -452,7 +526,7 @@ server <- function(input, output, session) {
       right.question <- input$question_name_right
       
       if (input$calculate_survey == T) {
-          survey.visualisation <- visualise.survey(data.tool(), left.question, right.question, c("note"))
+        survey.visualisation <- visualise.survey(data.tool(), left.question, right.question, c("note"))
       } else (
         survey.visualisation <- visualise.survey(data.tool(), left.question, right.question)
       )
@@ -475,8 +549,8 @@ server <- function(input, output, session) {
     }
     
   })
-
-    
+  
+  
   observeEvent(input$calculate_question, {
     if (!is.null(data.tool())) {
       if (input$calculate_question == T) {
