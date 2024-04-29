@@ -98,412 +98,428 @@ server <- function(input, output, session) {
   data.choices <- reactiveVal(NULL)
   
   label <- reactiveVal(NULL)
-  
+  correct_labels <- reactiveVal(NULL)
   
   # Load data from file
   observeEvent(input$file, {
     res <- readxl::read_xlsx(input$file$datapath, sheet = "survey", 
-                             col_types = "text") %>% names()
+                             col_types = "text",n_max=2) %>% names()
     
     label(res[grepl('english',tolower(res))][1])
     
-    labels <-label() 
-    data.tool(load.tool.survey(input$file$datapath,labels,keep_cols = T))
-    data.choices(load.tool.choices(filename_tool = input$file$datapath,
-                                   label_colname = labels,keep_cols = T))
+    res2 <- readxl::read_xlsx(input$file$datapath, sheet = "choices", 
+                              col_types = "text",n_max=2) %>% names()
+    
+    label_choices <- res2[grepl('english',tolower(res2))][1] 
+    if(label_choices!=label()){
+      showModal(
+        modalDialog(
+          title = "Error",
+          "English labels for questions have different names in 'choices' and 'survey' sheets, please fix and try again",
+          footer = NULL,
+          easyClose = TRUE
+        )
+      )
+    }else{
+      correct_labels(TRUE)
+    }
   })
   
   # Process data and update table
   observeEvent(input$processBtn, {
-    
-    showModal(
-      modalDialog(
-        title = "Processing the tool",
-        "Your tool is getting processed",
-        footer = NULL,
-        easyClose = TRUE
+    if (is.null(correct_labels())){return(NULL)}else{
+      
+      showModal(
+        modalDialog(
+          title = "Processing the tool",
+          "Your tool is getting processed",
+          footer = NULL,
+          easyClose = TRUE
+        )
       )
-    )
-    
-    
-    if (!is.null(data.tool())) {
-      kobo_data.tool <- data.tool()
-      kobo_data.choices <- data.choices()
-      labels <- label()
-      
-      kobo_data.t <- kobo_data.tool %>% 
-        rownames_to_column(var='rownames') %>% 
-        filter(!grepl('\\bsettlement|\\brectangle\\b|\\brectangles\\b|geo_location|\\bpoint\\b|\\bhub\\b|raion|hromada|oblast|center_idp',list_name))
-      
-      # get only geo list names
-      kobo_data.c.geo <- kobo_data.choices %>% 
-        rownames_to_column(var='rownames') %>% 
-        filter(grepl('raion|hromada|oblast',list_name))
-      
-      # get everything else
-      kobo_data.c <- kobo_data.choices %>% 
-        rownames_to_column(var='rownames') %>% 
-        filter(!grepl('\\bsettlement|\\brectangle\\b|\\brectangles\\b|geo_location|\\bpoint\\b|\\bhub\\b|raion|hromada|oblast|center_idp',list_name),
-               !grepl("^UKRs\\d+$", name),
-               !grepl("^UA\\d+$", name))
+      labels <-label() 
+      data.tool(load.tool.survey(input$file$datapath,labels,keep_cols = T))
+      data.choices(load.tool.choices(filename_tool = input$file$datapath,
+                                     label_colname = labels,keep_cols = T))
       
       
-      # test if all geo names are p codes
-      wrong_geo_entries <- kobo_data.c.geo %>% 
-        select(name,rownames) %>% 
-        filter(!grepl('^UA',name)) 
-      
-      if(nrow(wrong_geo_entries)>0){wrong_geo_entries <- wrong_geo_entries %>% 
-        mutate(issue = 'Geographic list_names added but names are not p-codes',
-               file = 'tool.choices',
-               column = 'name',
-               priority = 'First priority')%>% 
-        rename(value = name)
-      }else{
-        wrong_geo_entries <- data.frame()
-      }
-      
-      # check if all labels are present
-      
-      # survey page
-      labels_check.t <- kobo_data.t %>% 
-        select(rownames, starts_with('label::')) %>% 
-        filter(rowSums(is.na(select(., starts_with('label::')))) < ncol(select(., starts_with('label::')))) %>% 
-        filter(rowSums(is.na(.))>0) %>% 
-        select(any_of(c("rownames", names(.)[colSums(is.na(.)) > 0])))
-      
-      
-      if(nrow(labels_check.t)>0){
-        labels_check.t <- labels_check.t %>% 
-          pivot_longer(cols=select(.,starts_with('label::')) %>% names(), names_to = 'column',values_to = 'value') %>% 
-          filter(is.na(value)) %>% 
-          mutate(issue = 'Missing label',
-                 file = 'tool.survey',
-                 priority = 'First priority')
-      }else{
-        labels_check.t <- data.frame()
-      }
-      
-      # choices page
-      
-      labels_check.c <- kobo_data.c %>% 
-        select(rownames, starts_with('label::')) %>% 
-        filter(rowSums(is.na(select(., starts_with('label::')))) < ncol(select(., starts_with('label::')))) %>% 
-        filter(rowSums(is.na(.))>0) %>% 
-        select(any_of(c("rownames", names(.)[colSums(is.na(.)) > 0])))
-      
-      
-      if(nrow(labels_check.c)>0){
-        labels_check.c <- labels_check.c %>% 
-          pivot_longer(cols=select(.,starts_with('label::')) %>% names(), names_to = 'column',values_to = 'value') %>%
-          filter(is.na(value)) %>% 
-          mutate(issue = 'Missing label',
+      if (!is.null(data.tool())) {
+        kobo_data.tool <- data.tool()
+        kobo_data.choices <- data.choices()
+        labels <- label()
+        
+        kobo_data.t <- kobo_data.tool %>% 
+          rownames_to_column(var='rownames') %>% 
+          filter(!grepl('\\bsettlement|\\brectangle\\b|\\brectangles\\b|geo_location|\\bpoint\\b|\\bhub\\b|raion|hromada|oblast|center_idp',list_name))
+        
+        # get only geo list names
+        kobo_data.c.geo <- kobo_data.choices %>% 
+          rownames_to_column(var='rownames') %>% 
+          filter(grepl('raion|hromada|oblast',list_name))
+        
+        # get everything else
+        kobo_data.c <- kobo_data.choices %>% 
+          rownames_to_column(var='rownames') %>% 
+          filter(!grepl('\\bsettlement|\\brectangle\\b|\\brectangles\\b|geo_location|\\bpoint\\b|\\bhub\\b|raion|hromada|oblast|center_idp',list_name),
+                 !grepl("^UKRs\\d+$", name),
+                 !grepl("^UA\\d+$", name))
+        
+        
+        # test if all geo names are p codes
+        wrong_geo_entries <- kobo_data.c.geo %>% 
+          select(name,rownames) %>% 
+          filter(!grepl('^UA',name)) 
+        
+        if(nrow(wrong_geo_entries)>0){wrong_geo_entries <- wrong_geo_entries %>% 
+          mutate(issue = 'Geographic list_names added but names are not p-codes',
                  file = 'tool.choices',
-                 priority = 'First priority')
-      }else{
-        labels_check.c <- data.frame()
-      }
-      
-      # test for non eng in tool survey
-      non_eng.t <- kobo_data.t %>% 
-        select(name, relevant,type,rownames) %>% 
-        pivot_longer(cols= name:type, names_to = 'column', values_to = 'value') %>% 
-        filter(!is.na(value),
-               !value==' ',
-               !grepl('\xc2\xa0+',value),
-               grepl("[^ -~]",value, perl=T)) %>% 
-        mutate(cyrillic_char = regmatches(value, 
-                                          gregexpr("[^ -~]", 
-                                                   value, perl = TRUE)) %>%unlist  %>%  paste(collapse = '')) 
-      
-      if(nrow(non_eng.t)>0){non_eng.t <- non_eng.t %>% mutate(issue = 'cyrillic',
-                                                              file = 'tool.survey')}
-      
-      # test for non eng in tool survey
-      non_eng.c <- kobo_data.c %>% 
-        select(list_name,!!sym(labels),name,rownames) %>% 
-        pivot_longer(cols= list_name:name, names_to = 'column', values_to = 'value') %>% 
-        filter(!is.na(value),
-               !value==' ',
-               !grepl('\xc2\xa0+',value),
-               grepl("[^ -~]",value, perl=T)) %>% 
-        rowwise() %>% 
-        mutate(cyrillic_char = regmatches(value, 
-                                          gregexpr("[^ -~]", 
-                                                   value, perl = TRUE)) %>%unlist  %>%  paste(collapse = '')) %>% 
-        filter(!grepl('\\`|\\’|\\–|\\´',cyrillic_char ))
-      
-      if(nrow(non_eng.c)>0){non_eng.c <- non_eng.c %>% mutate(issue = 'cyrillic',
-                                                              file = 'tool.choices')}
-      
-      non_eng <- bind_rows(non_eng.c,non_eng.t)%>% 
-        mutate(priority = 'Second priority')
-      
-      # test for leading/trailing spaces in tool survey
-      add.space.t <- kobo_data.t %>% 
-        select(name,rownames) %>% 
-        rename(value=name) %>% 
-        filter(!is.na(value),
-               !value==' ',
-               grepl("^\\s+|\\s+$|\\s{2,}",value, perl=T))
-      
-      if(nrow(add.space.t)>0){add.space.t <- add.space.t %>% mutate(issue = 'double/leading/trailing space',
-                                                                    file = 'tool.survey')}
-      
-      
-      # test for leading/trailing spaces in tool choices
-      add.space.c <- kobo_data.c %>% 
-        filter(!grepl('geo',list_name)) %>% 
-        select(name,!!sym(labels),rownames) %>% 
-        pivot_longer(cols= name:!!sym(labels), names_to = 'column', values_to = 'value') %>% 
-        filter(!is.na(value),
-               !value==' ',
-               grepl("^\\s+|\\s+$|\\s{2,}",value, perl=T))
-      
-      if(nrow(add.space.c)>0){add.space.c <- add.space.c %>%
-        mutate(issue = 'double/leading/trailing space',
-               file = 'tool.choices')
-      }else{add.space.c <- data.frame()}
-      
-      add.space <- bind_rows(add.space.c,add.space.t)%>% 
-        mutate(priority = 'Second priority')
-      
-      
-      # check for _other variables
-      other_check <- kobo_data.t %>% 
-        filter(type=='text') %>% 
-        filter(!is.na(relevant)) %>% 
-        select(name,relevant,rownames) %>% 
-        mutate(single_rel = relevant) %>% 
-        tidyr::separate_rows(single_rel,sep='\\bor\\b|\\band\\b') %>% 
-        mutate(single_rel=str_squish(single_rel)) %>% 
-        filter(!grepl('not\\(selected',single_rel)) %>% 
-        mutate(n_relevancies=str_count(relevant,'\\{'),
-               questions_values = sapply(single_rel, parse.formula),
-               question_names = sapply(single_rel, function(x){parse.formula(x,return='name')})) %>% 
-        filter(grepl('other',questions_values))
-      
-      # check number of others per question
-      other_check_n_others <- other_check %>% 
-        group_by(question_names) %>% 
-        mutate(count_others = sum(n())) %>% 
-        filter(count_others>1) %>% 
-        ungroup()
-      if(nrow(other_check_n_others)>0){
-        other_check_n_others <- other_check_n_others %>% 
-          select(rownames,name,relevant)%>% 
+                 column = 'name',
+                 priority = 'First priority')%>% 
+          rename(value = name)
+        }else{
+          wrong_geo_entries <- data.frame()
+        }
+        
+        # check if all labels are present
+        
+        # survey page
+        labels_check.t <- kobo_data.t %>% 
+          select(rownames, starts_with('label::')) %>% 
+          filter(rowSums(is.na(select(., starts_with('label::')))) < ncol(select(., starts_with('label::')))) %>% 
+          filter(rowSums(is.na(.))>0) %>% 
+          select(any_of(c("rownames", names(.)[colSums(is.na(.)) > 0])))
+        
+        
+        if(nrow(labels_check.t)>0){
+          labels_check.t <- labels_check.t %>% 
+            pivot_longer(cols=select(.,starts_with('label::')) %>% names(), names_to = 'column',values_to = 'value') %>% 
+            filter(is.na(value)) %>% 
+            mutate(issue = 'Missing label',
+                   file = 'tool.survey',
+                   priority = 'First priority')
+        }else{
+          labels_check.t <- data.frame()
+        }
+        
+        # choices page
+        
+        labels_check.c <- kobo_data.c %>% 
+          select(rownames, starts_with('label::')) %>% 
+          filter(rowSums(is.na(select(., starts_with('label::')))) < ncol(select(., starts_with('label::')))) %>% 
+          filter(rowSums(is.na(.))>0) %>% 
+          select(any_of(c("rownames", names(.)[colSums(is.na(.)) > 0])))
+        
+        
+        if(nrow(labels_check.c)>0){
+          labels_check.c <- labels_check.c %>% 
+            pivot_longer(cols=select(.,starts_with('label::')) %>% names(), names_to = 'column',values_to = 'value') %>%
+            filter(is.na(value)) %>% 
+            mutate(issue = 'Missing label',
+                   file = 'tool.choices',
+                   priority = 'First priority')
+        }else{
+          labels_check.c <- data.frame()
+        }
+        
+        # test for non eng in tool survey
+        non_eng.t <- kobo_data.t %>% 
+          select(name, relevant,type,rownames) %>% 
+          pivot_longer(cols= name:type, names_to = 'column', values_to = 'value') %>% 
+          filter(!is.na(value),
+                 !value==' ',
+                 !grepl('\xc2\xa0+',value),
+                 grepl("[^ -~]",value, perl=T)) %>% 
+          mutate(cyrillic_char = regmatches(value, 
+                                            gregexpr("[^ -~]", 
+                                                     value, perl = TRUE)) %>%unlist  %>%  paste(collapse = '')) 
+        
+        if(nrow(non_eng.t)>0){non_eng.t <- non_eng.t %>% mutate(issue = 'cyrillic',
+                                                                file = 'tool.survey')}
+        
+        # test for non eng in tool survey
+        non_eng.c <- kobo_data.c %>% 
+          select(list_name,!!sym(labels),name,rownames) %>% 
+          pivot_longer(cols= list_name:name, names_to = 'column', values_to = 'value') %>% 
+          filter(!is.na(value),
+                 !value==' ',
+                 !grepl('\xc2\xa0+',value),
+                 grepl("[^ -~]",value, perl=T)) %>% 
+          rowwise() %>% 
+          mutate(cyrillic_char = regmatches(value, 
+                                            gregexpr("[^ -~]", 
+                                                     value, perl = TRUE)) %>%unlist  %>%  paste(collapse = '')) %>% 
+          filter(!grepl('\\`|\\’|\\–|\\´',cyrillic_char ))
+        
+        if(nrow(non_eng.c)>0){non_eng.c <- non_eng.c %>% mutate(issue = 'cyrillic',
+                                                                file = 'tool.choices')}
+        
+        non_eng <- bind_rows(non_eng.c,non_eng.t)%>% 
+          mutate(priority = 'Second priority')
+        
+        # test for leading/trailing spaces in tool survey
+        add.space.t <- kobo_data.t %>% 
+          select(name,type,rownames) %>% 
+          pivot_longer(c(name,type), names_to = 'column', values_to = 'value') %>% 
+          filter(!is.na(value),
+                 !value==' ',
+                 grepl("^\\s+|\\s+$|\\s{2,}",value, perl=T))
+        
+        if(nrow(add.space.t)>0){add.space.t <- add.space.t %>% mutate(issue = 'double/leading/trailing space',
+                                                                      file = 'tool.survey')}
+        
+        
+        # test for leading/trailing spaces in tool choices
+        add.space.c <- kobo_data.c %>% 
+          filter(!grepl('geo',list_name)) %>% 
+          select(name,!!sym(labels),rownames) %>% 
+          pivot_longer(cols= name:!!sym(labels), names_to = 'column', values_to = 'value') %>% 
+          filter(!is.na(value),
+                 !value==' ',
+                 grepl("^\\s+|\\s+$|\\s{2,}",value, perl=T))
+        
+        if(nrow(add.space.c)>0){add.space.c <- add.space.c %>%
+          mutate(issue = 'double/leading/trailing space',
+                 file = 'tool.choices')
+        }else{add.space.c <- data.frame()}
+        
+        add.space <- bind_rows(add.space.c,add.space.t)%>% 
+          mutate(priority = 'Second priority')
+        
+        # check for _other variables
+        other_check <- kobo_data.t %>% 
+          filter(type=='text') %>% 
+          filter(!is.na(relevant)) %>% 
+          select(name,relevant,rownames) %>% 
+          mutate(single_rel = relevant) %>% 
+          tidyr::separate_rows(single_rel,sep='\\bor\\b|\\band\\b') %>% 
+          mutate(single_rel=str_squish(single_rel)) %>% 
+          filter(!grepl('not\\(selected',single_rel)) %>% 
+          mutate(n_relevancies=str_count(relevant,'\\{'),
+                 questions_values = sapply(single_rel, parse.formula),
+                 question_names = sapply(single_rel, function(x){parse.formula(x,return='name')})) %>% 
+          filter(grepl('other',questions_values))
+        
+        # check number of others per question
+        other_check_n_others <- other_check %>% 
+          group_by(question_names) %>% 
+          mutate(count_others = sum(n())) %>% 
+          filter(count_others>1) %>% 
+          ungroup()
+        if(nrow(other_check_n_others)>0){
+          other_check_n_others <- other_check_n_others %>% 
+            select(rownames,name,relevant)%>% 
+            rename(value = relevant,
+                   column = name) %>% 
+            mutate(issue = 'Two others per 1 question. Pls fix',
+                   file = 'tool.survey')%>% 
+            mutate(priority = 'First priority')
+        }else(other_check_n_others <- data.frame())
+        
+        
+        other_n_rel <- other_check %>% filter(n_relevancies>1) %>% 
+          select(rownames,name,relevant) %>% 
           rename(value = relevant,
                  column = name) %>% 
-          mutate(issue = 'Two others per 1 question. Pls fix',
+          mutate(issue = 'Multiple relevancy on other question. _other questions should only rely on 1 relevancy',
                  file = 'tool.survey')%>% 
-          mutate(priority = 'First priority')
-      }else(other_check_n_others <- data.frame())
-      
-      
-      other_n_rel <- other_check %>% filter(n_relevancies>1) %>% 
-        select(rownames,name,relevant) %>% 
-        rename(value = relevant,
-               column = name) %>% 
-        mutate(issue = 'Double relevancy',
-               file = 'tool.survey')%>% 
-        mutate(priority = 'First priority')
-      
-      other_wrong_choice <- other_check %>% filter(!questions_values=='other') %>% 
-        select(rownames,name,relevant) %>% 
-        rename(value = relevant,
-               column = name) %>% 
-        mutate(issue = 'Other choice is not called "other"',
-               file = 'tool.survey')%>% 
-        mutate(priority = 'First priority')
-      
-      other_wrong_name <- other_check %>% filter(!grepl('_other$',name)) %>% 
-        select(rownames,name,relevant) %>% 
-        rename(value = relevant,
-               column = name) %>% 
-        mutate(issue = "The name of this 'other' value doesn't end with '_other' this will break the cleaning script",
-               file = 'tool.survey')%>% 
-        mutate(priority = 'First priority')
-      
-      other_checks <- bind_rows(other_n_rel,other_wrong_choice,other_wrong_name,other_check_n_others)
-      
-      
-      # check if all relevances match the available choices
-      check_rel <- kobo_data.t %>% 
-        select(rownames,name, type, relevant) %>% 
-        filter(!is.na(relevant),
-               grepl('select_multiple|select_one',type)) %>% 
-        mutate(single_rel = str_squish(relevant)) %>% 
-        tidyr::separate_rows(single_rel,sep="(?<!\\.|\\})\\,") %>% 
-        tidyr::separate_rows(single_rel,sep='\\bor\\b|\\band\\b') %>% 
-        filter(grepl('selected',single_rel))
-      
-      if(nrow(check_rel)>0){
-        check_rel <- check_rel %>% 
-          mutate(questions_values = sapply(single_rel, parse.formula),
-                 question_names = sapply(single_rel, function(x){parse.formula(x,return='name')})
-          ) %>% 
-          unnest_longer(questions_values:question_names) %>% 
-          filter(!grepl("^UKRs\\d+$", questions_values),
-                 !grepl("^UA\\d+$", questions_values)) %>% 
-          left_join(kobo_data.t %>% select(name,list_name) %>% rename(question_names=name)) %>% 
-          rowwise() %>% 
-          mutate(check = 
-                   questions_values %in% kobo_data.c[kobo_data.c$list_name==list_name,]$name
-          ) %>% 
-          filter(check==F & !questions_values=='') %>% 
-          mutate(issue = paste0('Relevance value ',questions_values, ' is not present in the list ',list_name),
-                 column = 'relevant',
-                 file = 'tool.survey') %>% 
-          rename(value=relevant) %>% 
-          select(rownames,column,value,issue,file)%>% 
           mutate(priority = 'First priority')
         
-      }else{check_rel <- data.frame()}
-      
-      # check constraints for having existing values
-      check_con <- kobo_data.t %>% 
-        select(rownames,name, type, constraint) %>% 
-        filter(!is.na(constraint),
-               grepl('select_multiple|select_one',type)) %>% 
-        mutate(single_const = str_squish(constraint)) %>% 
-        tidyr::separate_rows(single_const,sep="(?<!\\.|\\})\\,") %>% 
-        tidyr::separate_rows(single_const,sep='\\bor\\b|\\band\\b') %>% 
-        filter(grepl('selected\\(\\$',single_const))
-      
-      if(nrow(check_con)>0){
-        check_con <- check_con %>% 
-          mutate(questions_values = sapply(single_const, parse.formula),
-                 question_names = sapply(single_const, function(x){parse.formula(x,return='name')})) %>% 
-          unnest_longer(questions_values:question_names) %>% 
-          filter(!grepl("^UKRs\\d+$", questions_values),
-                 !grepl("^UA\\d+$", questions_values)) %>% 
-          left_join(kobo_data.t %>% select(name,list_name) %>% rename(question_names=name)) %>% 
-          rowwise() %>% 
-          mutate(check = 
-                   questions_values %in% kobo_data.c[kobo_data.c$list_name==list_name,]$name
-          ) %>% 
-          filter(check==F & !questions_values=='') %>% 
-          mutate(issue = paste0('Constraint value ',questions_values, ' is not present in the list ',list_name),
-                 column = 'relevant',
-                 file = 'tool.survey') %>% 
-          rename(value=constraint) %>% 
-          select(rownames,column,value,issue,file)%>% 
-          mutate(priority = 'First priority')
-      }else{check_con <- data.frame()}
-      
-      
-      # check if all list_choices are in the choices sheet
-      
-      missing_names <- setdiff(kobo_data.c$list_name, kobo_data.t$list_name)
-      
-      if(length(missing_names)>0){
-        missing_list_names <- kobo_data.c %>% 
-          filter(list_name %in% missing_names) %>% 
-          select(rownames,list_name) %>%
-          distinct(list_name, .keep_all = T) %>% 
-          rename(value = list_name) %>% 
-          mutate(column = 'list_name',
-                 issue = paste('list_name',value,'is not used in the survey sheet'),
-                 file = 'tool.choices')%>% 
-          mutate(priority = 'Second priority')
-      }else{missing_list_names <- data.frame()}
-      
-      # Duplicate choices in list_choices
-      
-      dupl_choices <- kobo_data.c %>%
-        group_by(list_name,name) %>%
-        mutate(dupobs = n()) %>%
-        filter(dupobs>1) %>% 
-        ungroup() 
-      if(nrow(dupl_choices)>0){
-        dupl_choices <- dupl_choices %>% 
-          group_by(list_name) %>% 
-          summarise(issue = paste0('duplicate name in list_name ',unique(list_name)),
-                    rownames = min(rownames),
-                    value = unique(name)) %>% 
-          ungroup() %>% 
-          select(-list_name) %>% 
-          mutate(column = 'name',
-                 file = 'tool.choices')%>% 
-          mutate(priority = 'First priority')
-      }else{dupl_choices <- data.frame()}
-      
-      
-      # Check if None is in constraint if it's present in the list of choices
-      non_check <- kobo_data.t %>% 
-        filter(grepl('select_multiple',type)) %>% 
-        select(rownames,list_name,constraint) %>% 
-        rowwise() %>% 
-        mutate(check = any(grepl('none', kobo_data.c[kobo_data.c$list_name %in% list_name,]$name))) %>%
-        ungroup() %>% 
-        mutate(check2 = grepl('none',constraint)) %>% 
-        filter(check==T & check2==F)
-      if(nrow(non_check)>0){
-        non_check <- non_check %>% 
-          select(rownames,constraint) %>% 
-          rename(value=constraint) %>% 
-          mutate(column = 'constraint',
-                 issue = 'None is present in the list_name for the variable, but not in the constraint',
+        other_wrong_choice <- other_check %>% filter(!questions_values=='other') %>% 
+          select(rownames,name,relevant) %>% 
+          rename(value = relevant,
+                 column = name) %>% 
+          mutate(issue = 'Other choice is not called "other"',
                  file = 'tool.survey')%>% 
-          mutate(priority = 'Second priority')
-      }else{non_check <- data.frame()}
-      
-      
-      # Check if the names match the labels (at least somewhat)
-      
-      label_issues <- kobo_data.c %>% 
-        tibble() %>% 
-        select(list_name,rownames,name,!!sym(labels)) %>% 
-        mutate(name = tolower(gsub('_',' ',name)),
-               label = tolower(gsub('_',' ',!!sym(labels))),
-               label = gsub("\\(.*?\\)", "", label),
-               label = gsub("[[:punct:]]", "", label),
-               similarity = stringsim(
-                 name,label,
-                 method='jaccard',
-                 q=2
-               )) %>% 
-        rowwise() %>% 
-        filter(similarity<0.2 & ! grepl(name,label) & !name=='idk') %>% ungroup()
-      if(nrow(label_issues)>0){
-        label_issues <- label_issues %>% 
-          mutate(issue = paste0('The name "',name,'" is dissimlar to the label "',!!sym(labels),'". Please double check'),
-                 column = labels,
-                 value = !!sym(labels),
-                 file = 'tool.choices') %>% 
-          select(rownames,column,value,issue,file) %>% 
-          mutate(priority = 'Second priority')
-      }else{label_issues <- data.frame()}
-      
-      
-      processed_data <- bind_rows(other_checks,add.space,non_eng,check_rel,check_con,
-                                  dupl_choices,check_con,check_rel,non_check,label_issues,
-                                  missing_list_names,wrong_geo_entries,
-                                  labels_check.c,labels_check.t) %>% 
-        relocate(file) %>% 
-        mutate(rownames = as.numeric(rownames)+1) %>% 
-        arrange(priority)
-      
-      if(all(is.na(processed_data$cyrillic_char))){
-        processed_data <- processed_data %>% select(-cyrillic_char)
-      }
-      
-      processed_data <- processed_data %>% mutate(across(everything(), as.character))
-      
-      output$resultTable <- renderDT({
-        DT::datatable(
-          processed_data,
-          filter = "top",
-          extensions = 'Buttons',
-          options = list(
-            dom = 'lfrtipB',
-            buttons = c("copy", "excel"),
-            pageLength = 100,
-            scrollX=TRUE
+          mutate(priority = 'First priority')
+        
+        other_wrong_name <- other_check %>% filter(!grepl('_other$',name)) %>% 
+          select(rownames,name,relevant) %>% 
+          rename(value = relevant,
+                 column = name) %>% 
+          mutate(issue = "The name of this 'other' value doesn't end with '_other' this will break the cleaning script",
+                 file = 'tool.survey')%>% 
+          mutate(priority = 'First priority')
+        
+        other_checks <- bind_rows(other_n_rel,other_wrong_choice,other_wrong_name,other_check_n_others)
+        
+        
+        # check if all relevances match the available choices
+        check_rel <- kobo_data.t %>% 
+          select(rownames,name, type, relevant) %>% 
+          filter(!is.na(relevant),
+                 grepl('select_multiple|select_one',type)) %>% 
+          mutate(single_rel = str_squish(relevant)) %>% 
+          tidyr::separate_rows(single_rel,sep="(?<!\\.|\\})\\,") %>% 
+          tidyr::separate_rows(single_rel,sep='\\bor\\b|\\band\\b') %>% 
+          filter(grepl('selected',single_rel))
+        
+        if(nrow(check_rel)>0){
+          check_rel <- check_rel %>% 
+            mutate(questions_values = sapply(single_rel, parse.formula),
+                   question_names = sapply(single_rel, function(x){parse.formula(x,return='name')})
+            ) %>% 
+            unnest_longer(questions_values:question_names) %>% 
+            filter(!grepl("^UKRs\\d+$", questions_values),
+                   !grepl("^UA\\d+$", questions_values)) %>% 
+            left_join(kobo_data.t %>% select(name,list_name) %>% rename(question_names=name)) %>% 
+            rowwise() %>% 
+            mutate(check = 
+                     questions_values %in% kobo_data.c[kobo_data.c$list_name==list_name,]$name
+            ) %>% 
+            filter(check==F & !questions_values=='') %>% 
+            mutate(issue = paste0('Relevance value ',questions_values, ' is not present in the list ',list_name),
+                   column = 'relevant',
+                   file = 'tool.survey') %>% 
+            rename(value=relevant) %>% 
+            select(rownames,column,value,issue,file)%>% 
+            mutate(priority = 'First priority')
+          
+        }else{check_rel <- data.frame()}
+        
+        # check constraints for having existing values
+        check_con <- kobo_data.t %>% 
+          select(rownames,name, type, constraint) %>% 
+          filter(!is.na(constraint),
+                 grepl('select_multiple|select_one',type)) %>% 
+          mutate(single_const = str_squish(constraint)) %>% 
+          tidyr::separate_rows(single_const,sep="(?<!\\.|\\})\\,") %>% 
+          tidyr::separate_rows(single_const,sep='\\bor\\b|\\band\\b') %>% 
+          filter(grepl('selected\\(\\$',single_const))
+        
+        if(nrow(check_con)>0){
+          check_con <- check_con %>% 
+            mutate(questions_values = sapply(single_const, parse.formula),
+                   question_names = sapply(single_const, function(x){parse.formula(x,return='name')})) %>% 
+            unnest_longer(questions_values:question_names) %>% 
+            filter(!grepl("^UKRs\\d+$", questions_values),
+                   !grepl("^UA\\d+$", questions_values)) %>% 
+            left_join(kobo_data.t %>% select(name,list_name) %>% rename(question_names=name)) %>% 
+            rowwise() %>% 
+            mutate(check = 
+                     questions_values %in% kobo_data.c[kobo_data.c$list_name==list_name,]$name
+            ) %>% 
+            filter(check==F & !questions_values=='') %>% 
+            mutate(issue = paste0('Constraint value ',questions_values, ' is not present in the list ',list_name),
+                   column = 'relevant',
+                   file = 'tool.survey') %>% 
+            rename(value=constraint) %>% 
+            select(rownames,column,value,issue,file)%>% 
+            mutate(priority = 'First priority')
+        }else{check_con <- data.frame()}
+        
+        
+        # check if all list_choices are in the choices sheet
+        
+        missing_names <- setdiff(kobo_data.c$list_name, kobo_data.t$list_name)
+        
+        if(length(missing_names)>0){
+          missing_list_names <- kobo_data.c %>% 
+            filter(list_name %in% missing_names) %>% 
+            select(rownames,list_name) %>%
+            distinct(list_name, .keep_all = T) %>% 
+            rename(value = list_name) %>% 
+            mutate(column = 'list_name',
+                   issue = paste('list_name',value,'is not used in the survey sheet'),
+                   file = 'tool.choices')%>% 
+            mutate(priority = 'Second priority')
+        }else{missing_list_names <- data.frame()}
+        
+        # Duplicate choices in list_choices
+        
+        dupl_choices <- kobo_data.c %>%
+          group_by(list_name,name) %>%
+          mutate(dupobs = n()) %>%
+          filter(dupobs>1) %>% 
+          ungroup() 
+        if(nrow(dupl_choices)>0){
+          dupl_choices <- dupl_choices %>% 
+            group_by(list_name) %>% 
+            summarise(issue = paste0('duplicate name in list_name ',unique(list_name)),
+                      rownames = min(rownames),
+                      value = unique(name)) %>% 
+            ungroup() %>% 
+            select(-list_name) %>% 
+            mutate(column = 'name',
+                   file = 'tool.choices')%>% 
+            mutate(priority = 'First priority')
+        }else{dupl_choices <- data.frame()}
+        
+        
+        # Check if None is in constraint if it's present in the list of choices
+        non_check <- kobo_data.t %>% 
+          filter(grepl('select_multiple',type)) %>% 
+          select(rownames,list_name,constraint) %>% 
+          rowwise() %>% 
+          mutate(check = any(grepl('none', kobo_data.c[kobo_data.c$list_name %in% list_name,]$name))) %>%
+          ungroup() %>% 
+          mutate(check2 = grepl('none',constraint)) %>% 
+          filter(check==T & check2==F)
+        if(nrow(non_check)>0){
+          non_check <- non_check %>% 
+            select(rownames,constraint) %>% 
+            rename(value=constraint) %>% 
+            mutate(column = 'constraint',
+                   issue = 'None is present in the list_name for the variable, but not in the constraint',
+                   file = 'tool.survey')%>% 
+            mutate(priority = 'Second priority')
+        }else{non_check <- data.frame()}
+        
+        
+        # Check if the names match the labels (at least somewhat)
+        
+        label_issues <- kobo_data.c %>% 
+          tibble() %>% 
+          select(list_name,rownames,name,!!sym(labels)) %>% 
+          mutate(name = tolower(gsub('_',' ',name)),
+                 label = tolower(gsub('_',' ',!!sym(labels))),
+                 label = gsub("\\(.*?\\)", "", label),
+                 label = gsub("[[:punct:]]", "", label),
+                 similarity = stringsim(
+                   name,label,
+                   method='jaccard',
+                   q=2
+                 )) %>% 
+          rowwise() %>% 
+          filter(similarity<0.2 & ! grepl(name,label) & !name=='idk') %>% ungroup()
+        if(nrow(label_issues)>0){
+          label_issues <- label_issues %>% 
+            mutate(issue = paste0('The name "',name,'" is dissimlar to the label "',!!sym(labels),'". Please double check'),
+                   column = labels,
+                   value = !!sym(labels),
+                   file = 'tool.choices') %>% 
+            select(rownames,column,value,issue,file) %>% 
+            mutate(priority = 'Second priority')
+        }else{label_issues <- data.frame()}
+        
+        
+        processed_data <- bind_rows(other_checks,add.space,non_eng,check_rel,check_con,
+                                    dupl_choices,check_con,check_rel,non_check,
+                                    missing_list_names,wrong_geo_entries,
+                                    labels_check.c,labels_check.t,label_issues) %>% 
+          relocate(file) %>% 
+          mutate(rownames = as.numeric(rownames)+1) %>% 
+          arrange(priority)
+        
+        if(all(is.na(processed_data$cyrillic_char))){
+          processed_data <- processed_data %>% select(-cyrillic_char)
+        }
+        
+        processed_data <- processed_data %>% mutate(across(everything(), as.character))
+        removeModal()
+        output$resultTable <- renderDT({
+          DT::datatable(
+            processed_data,
+            filter = "top",
+            extensions = 'Buttons',
+            options = list(
+              dom = 'lfrtipB',
+              buttons = c("copy", "excel"),
+              pageLength = 100,
+              scrollX=TRUE
+            )
           )
-        )
-      })
-      
+        })
+      }
     }
   })
   
