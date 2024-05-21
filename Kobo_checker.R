@@ -221,6 +221,8 @@ server <- function(input, output, session) {
           labels_check.c <- data.frame()
         }
         
+        
+        
         # test for non eng in tool survey
         non_eng.t <- kobo_data.t %>% 
           select(name, relevant,type,rownames) %>% 
@@ -341,6 +343,92 @@ server <- function(input, output, session) {
           mutate(priority = 'First priority')
         
         other_checks <- bind_rows(other_n_rel,other_wrong_choice,other_wrong_name,other_check_n_others)
+        
+        # check if relevances exist and are in the correct places
+        check_rel_basic <- kobo_data.t %>% 
+          select(rownames,name, type, relevant) %>% 
+          filter(!is.na(relevant)) %>% 
+          mutate(single_rel = str_squish(relevant)) %>% 
+          tidyr::separate_rows(single_rel,sep="(?<!\\.|\\})\\,") %>% 
+          tidyr::separate_rows(single_rel,sep='\\bor\\b|\\band\\b') %>% 
+          filter(grepl('selected',single_rel)) %>% 
+          mutate(single_rel = str_squish(str_extract(single_rel, "(?<=\\{).*(?=\\})"))) %>% 
+          filter(!grepl('settlement|\\brectangle\\b|\\brectangles\\b|geo_location|\\bpoint\\b|\\bhub\\b|raion|hromada|oblast|center_idp',single_rel)) %>% 
+          left_join(kobo_data.t %>% 
+                      select(name,rownames) %>% 
+                      rename(rownames_rel = rownames), by = c('single_rel'='name')) %>% 
+          mutate(rownames = as.numeric(rownames),
+                 rownames_rel = as.numeric(rownames_rel),
+                 rest_rel = rownames_rel>rownames)
+        
+        if(any(is.na(check_rel_basic$rownames_rel))){
+          check_rel_basic_na <- check_rel_basic %>% 
+            filter(is.na(rownames_rel)) %>% 
+            rename(value = relevant) %>% 
+            mutate(column = 'relevant',
+                   issue = 'Missing relevance variable',
+                   file = 'tool.survey') %>% 
+            select( rownames,column,value,issue,file) %>% 
+            mutate(priority = 'First priority') %>% 
+            mutate(rownames=as.character(rownames))
+        }else{check_rel_basic_na <- data.frame()}
+        
+        
+        if(any(na.omit(check_rel_basic$rest_rel))){
+          check_rel_basic_order <- check_rel_basic %>% 
+            filter(rest_rel==TRUE) %>% 
+            rename(value = relevant) %>% 
+            mutate(column = 'relevant',
+                   issue = paste0("Variable is linked to a relevance ",single_rel ," that is located before the variable's row"),
+                   file = 'tool.survey') %>% 
+            select( rownames,column,value,issue,file) %>% 
+            mutate(priority = 'First priority')%>% 
+            mutate(rownames=as.character(rownames))
+        }else{check_rel_basic_order <- data.frame()}
+        
+        
+        # check the same for constraints
+        check_con_basic <- kobo_data.t %>% 
+          select(rownames,name, type, constraint) %>% 
+          filter(!is.na(constraint)) %>% 
+          mutate(single_con = str_squish(constraint)) %>% 
+          tidyr::separate_rows(single_con,sep="(?<!\\.|\\})\\,") %>% 
+          tidyr::separate_rows(single_con,sep='\\bor\\b|\\band\\b') %>% 
+          filter(grepl('selected',single_con)) %>% 
+          mutate(single_con = str_squish(str_extract(single_con, "(?<=\\{).*(?=\\})"))) %>% 
+          filter(!is.na(single_con)) %>% 
+          filter(!grepl('settlement|\\brectangle\\b|\\brectangles\\b|geo_location|\\bpoint\\b|\\bhub\\b|raion|hromada|oblast|center_idp',single_con)) %>% 
+          left_join(kobo_data.t %>% 
+                      select(name,rownames) %>% 
+                      rename(rownames_con = rownames), by = c('single_con'='name')) %>% 
+          mutate(rownames = as.numeric(rownames),
+                 rownames_con = as.numeric(rownames_con),
+                 rest_con = rownames_con>rownames)
+        
+        if(any(is.na(check_con_basic$rownames_con))){
+          check_con_basic_na <- check_con_basic %>% 
+            filter(is.na(rownames_con)) %>% 
+            rename(value = constraint) %>% 
+            mutate(column = 'constraint',
+                   issue = 'Missing constraint variable',
+                   file = 'tool.survey') %>% 
+            select( rownames,column,value,issue,file) %>% 
+            mutate(priority = 'First priority')%>% 
+            mutate(rownames=as.character(rownames))
+        }else{check_con_basic_na <- data.frame()}
+        
+        
+        if(any(na.omit(check_con_basic$rest_con))){
+          check_con_basic_order <- check_con_basic %>% 
+            filter(rest_con==TRUE) %>% 
+            rename(value = constraint) %>% 
+            mutate(column = 'constraint',
+                   issue = paste0("Variable is linked to a constraint ",single_con ," that is located before the variable's row"),
+                   file = 'tool.survey') %>% 
+            select( rownames,column,value,issue,file) %>% 
+            mutate(priority = 'First priority') %>% 
+            mutate(rownames=as.character(rownames))
+        }else{check_con_basic_order <- data.frame()}
         
         
         # check if all relevances match the available choices
@@ -493,7 +581,8 @@ server <- function(input, output, session) {
         
         
         processed_data <- bind_rows(other_checks,add.space,non_eng,check_rel,check_con,
-                                    dupl_choices,check_con,check_rel,non_check,
+                                    dupl_choices,check_rel_basic_na,check_rel_basic_order,
+                                    check_con_basic_na,check_con_basic_order,non_check,
                                     missing_list_names,wrong_geo_entries,
                                     labels_check.c,labels_check.t,label_issues) %>% 
           relocate(file) %>% 
