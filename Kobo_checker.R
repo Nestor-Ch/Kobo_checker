@@ -97,6 +97,10 @@ server <- function(input, output, session) {
   data.tool <- reactiveVal(NULL)
   data.choices <- reactiveVal(NULL)
   
+  
+  data.tool_og <- reactiveVal(NULL)
+  data.choices_og <- reactiveVal(NULL)
+  
   label <- reactiveVal(NULL)
   correct_labels <- reactiveVal(NULL)
   
@@ -142,24 +146,41 @@ server <- function(input, output, session) {
       data.choices(load.tool.choices(filename_tool = input$file$datapath,
                                      label_colname = labels,keep_cols = T))
       
+      data.tool_og(readxl::read_xlsx(input$file$datapath, sheet = "survey", 
+                                     col_types = "text"))
+      
+      data.choices_og(readxl::read_xlsx(input$file$datapath, sheet = "choices", 
+                      col_types = "text"))
+      
       
       if (!is.null(data.tool())) {
+        
+        #add a new load functionality
+        
         kobo_data.tool <- data.tool()
         kobo_data.choices <- data.choices()
         labels <- label()
         
+
+        # process og files
+        kobo_tool_og <- data.tool_og() %>% 
+          rownames_to_column(var='rownames')
+        kobo.choices_og <- data.choices_og() %>% 
+          rownames_to_column(var='rownames')
+        
+        
         kobo_data.t <- kobo_data.tool %>% 
-          rownames_to_column(var='rownames') %>% 
+          left_join(kobo_tool_og %>% select(name, type,rownames,starts_with('label'))) %>% 
           filter(!grepl('\\bsettlement|\\brectangle\\b|\\brectangles\\b|geo_location|\\bpoint\\b|\\bhub\\b|raion|hromada|oblast|center_idp',list_name))
         
         # get only geo list names
         kobo_data.c.geo <- kobo_data.choices %>% 
-          rownames_to_column(var='rownames') %>% 
+          left_join(kobo.choices_og) %>% 
           filter(grepl('raion|hromada|oblast',list_name))
         
         # get everything else
         kobo_data.c <- kobo_data.choices %>% 
-          rownames_to_column(var='rownames') %>% 
+          left_join(kobo.choices_og) %>% 
           filter(!grepl('\\bsettlement|\\brectangle\\b|\\brectangles\\b|geo_location|\\bpoint\\b|\\bhub\\b|raion|hromada|oblast|center_idp',list_name),
                  !grepl("^UKRs\\d+$", name),
                  !grepl("^UA\\d+$", name))
@@ -168,7 +189,8 @@ server <- function(input, output, session) {
         # test if all geo names are p codes
         wrong_geo_entries <- kobo_data.c.geo %>% 
           select(name,rownames) %>% 
-          filter(!grepl('^UA',name)) 
+          filter(!grepl('^UA',name),
+                 !grepl('prefer|refuse',name)) 
         
         if(nrow(wrong_geo_entries)>0){wrong_geo_entries <- wrong_geo_entries %>% 
           mutate(issue = 'Geographic list_names added but names are not p-codes',
@@ -181,15 +203,13 @@ server <- function(input, output, session) {
         }
         
         # check if all labels are present
-        
         # survey page
         labels_check.t <- kobo_data.t %>% 
-          select(rownames, starts_with('label::')) %>% 
+          select(rownames, starts_with('label::')) %>%
           filter(rowSums(is.na(select(., starts_with('label::')))) < ncol(select(., starts_with('label::')))) %>% 
           filter(rowSums(is.na(.))>0) %>% 
           select(any_of(c("rownames", names(.)[colSums(is.na(.)) > 0])))
-        
-        
+
         if(nrow(labels_check.t)>0){
           labels_check.t <- labels_check.t %>% 
             pivot_longer(cols=select(.,starts_with('label::')) %>% names(), names_to = 'column',values_to = 'value') %>% 
